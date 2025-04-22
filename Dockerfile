@@ -7,7 +7,7 @@ RUN CGO_ENABLED=0 go build -o mcp-proxy main.go
 
 FROM ghcr.io/astral-sh/uv:debian-slim 
 ENV DEBIAN_FRONTEND=noninteractive \
-    NODE_VERSION=23.x
+    NODE_VERSION=lts.x
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl ca-certificates && \
     curl -fsSL --fail https://deb.nodesource.com/setup_${NODE_VERSION} | bash - && \
