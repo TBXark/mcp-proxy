@@ -77,7 +77,11 @@ The server is configured using a JSON file. Below is an example configuration:
         "logEnabled": false,
         "authTokens": [
           "SpecificTokens"
-        ]
+        ],
+        "toolFilter": {
+          "mode": "block", // "allow" or "block" (default: "block")
+          "list": ["tool_name_to_block_or_allow"]
+        }
       }
     },
     "amap": {
@@ -93,8 +97,13 @@ Common options for `mcpProxy` and `mcpServers`.
 - `panicIfInvalid`: If true, the server will panic if the client is invalid.
 - `logEnabled`: If true, the server will log the client's requests.
 - `authTokens`: A list of authentication tokens for the client. The `Authorization` header will be checked against this list. 
+- `toolFilter`: Optional tool filtering configuration.
+  - `mode`: "allow" or "block" (default: "block")
+  - `list`: A list of tool names to block or allow
 
-> In the new configuration, the `authTokens` of `mcpProxy` is not a global authentication token, but rather the default authentication token for `mcpProxy`. When `authTokens` is set in `mcpServers`, the value of `authTokens` in `mcpServers` will be used instead of the value in `mcpProxy`. In other words, the `authTokens` of `mcpProxy` serves as a default value and is only applied when `authTokens` is not set in `mcpServers`.
+  > **Tip:** If you don't know the exact tool names, run the proxy once without any `toolFilter` configured. The console will log messages like `<server_name> Adding tool <tool_name>` for each successfully registered tool. You can use these logged names in your `toolFilter` list.
+
+ > In the new configuration, the `authTokens` of `mcpProxy` is not a global authentication token, but rather the default authentication token for `mcpProxy`. When `authTokens` is set in `mcpServers`, the value of `authTokens` in `mcpServers` will be used instead of the value in `mcpProxy`. In other words, the `authTokens` of `mcpProxy` serves as a default value and is only applied when `authTokens` is not set in `mcpServers`.
 > Other fields are the same.
 
 ### **`mcpProxy`**

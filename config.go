@@ -82,10 +82,16 @@ func parseMCPClientConfigV1(conf *MCPClientConfigV1) (any, error) {
 
 // ---- V2 ----
 
+type ToolFilterConfig struct {
+	Mode string   `json:"mode,omitempty"` // 过滤模式 ("allow" or "block")
+	List []string `json:"list,omitempty"` // 用于过滤的工具列表
+}
+
 type OptionsV2 struct {
 	PanicIfInvalid optional.Field[bool] `json:"panicIfInvalid,omitempty"`
 	LogEnabled     optional.Field[bool] `json:"logEnabled,omitempty"`
 	AuthTokens     []string             `json:"authTokens,omitempty"`
+	ToolFilter     *ToolFilterConfig    `json:"toolFilter,omitempty"` // 工具过滤配置
 }
 
 type MCPProxyConfigV2 struct {
