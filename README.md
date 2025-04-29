@@ -79,7 +79,7 @@ The server is configured using a JSON file. Below is an example configuration:
           "SpecificTokens"
         ],
         "toolFilter": {
-          "mode": "block", // "allow" or "block" (default: "block")
+          "mode": "block", // Must be explicitly set to "allow" or "block"
           "list": ["tool_name_to_block_or_allow"]
         }
       }
@@ -98,8 +98,8 @@ Common options for `mcpProxy` and `mcpServers`.
 - `logEnabled`: If true, the server will log the client's requests.
 - `authTokens`: A list of authentication tokens for the client. The `Authorization` header will be checked against this list. 
 - `toolFilter`: Optional tool filtering configuration.
-  - `mode`: "allow" or "block" (default: "block")
-  - `list`: A list of tool names to block or allow
+  - `mode`: Specifies the filtering mode. Must be explicitly set to "allow" or "block" if `list` is provided. If `list` is present but `mode` is missing or invalid, the filter will be ignored for this server.
+  - `list`: A list of tool names to filter (either allow or block based on the `mode`).
 
   > **Tip:** If you don't know the exact tool names, run the proxy once without any `toolFilter` configured. The console will log messages like `<server_name> Adding tool <tool_name>` for each successfully registered tool. You can use these logged names in your `toolFilter` list.
 
