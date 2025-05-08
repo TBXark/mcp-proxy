@@ -142,3 +142,4 @@ fabric.properties
 
 /mcp-proxy
 /build
+**/.claude/settings.local.json

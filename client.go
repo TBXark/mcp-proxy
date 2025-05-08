@@ -27,39 +27,42 @@ func newMCPClient(name string, conf *MCPClientConfigV2) (*Client, error) {
 	if pErr != nil {
 		return nil, pErr
 	}
+	
+	var clientType string
+	var mcpClient *client.Client
+	var needPing, needManualStart bool
+	
 	switch v := clientInfo.(type) {
 	case *StdioMCPClientConfig:
+		clientType = string(MCPClientTypeStdio)
 		envs := make([]string, 0, len(v.Env))
 		for kk, vv := range v.Env {
 			envs = append(envs, fmt.Sprintf("%s=%s", kk, vv))
 		}
-		mcpClient, err := client.NewStdioMCPClient(v.Command, envs, v.Args...)
+		var err error
+		mcpClient, err = client.NewStdioMCPClient(v.Command, envs, v.Args...)
 		if err != nil {
+			GetMetrics().clientConnectionErrors.WithLabelValues(name, clientType, "creation").Inc()
 			return nil, err
 		}
 
-		return &Client{
-			name:    name,
-			client:  mcpClient,
-			options: conf.Options,
-		}, nil
 	case *SSEMCPClientConfig:
+		clientType = string(MCPClientTypeSSE)
 		var options []transport.ClientOption
 		if len(v.Headers) > 0 {
 			options = append(options, client.WithHeaders(v.Headers))
 		}
-		mcpClient, err := client.NewSSEMCPClient(v.URL, options...)
+		var err error
+		mcpClient, err = client.NewSSEMCPClient(v.URL, options...)
 		if err != nil {
+			GetMetrics().clientConnectionErrors.WithLabelValues(name, clientType, "creation").Inc()
 			return nil, err
 		}
-		return &Client{
-			name:            name,
-			needPing:        true,
-			needManualStart: true,
-			client:          mcpClient,
-			options:         conf.Options,
-		}, nil
+		needPing = true
+		needManualStart = true
+		
 	case *StreamableMCPClientConfig:
+		clientType = string(MCPClientTypeStreamable)
 		var options []transport.StreamableHTTPCOption
 		if len(v.Headers) > 0 {
 			options = append(options, transport.WithHTTPHeaders(v.Headers))
@@ -67,19 +70,29 @@ func newMCPClient(name string, conf *MCPClientConfigV2) (*Client, error) {
 		if v.Timeout > 0 {
 			options = append(options, transport.WithHTTPTimeout(v.Timeout))
 		}
-		mcpClient, err := client.NewStreamableHttpClient(v.URL, options...)
+		var err error
+		mcpClient, err = client.NewStreamableHttpClient(v.URL, options...)
 		if err != nil {
+			GetMetrics().clientConnectionErrors.WithLabelValues(name, clientType, "creation").Inc()
 			return nil, err
 		}
-		return &Client{
-			name:            name,
-			needPing:        true,
-			needManualStart: true,
-			client:          mcpClient,
-			options:         conf.Options,
-		}, nil
+		needPing = true
+		needManualStart = true
+		
+	default:
+		return nil, errors.New("invalid client type")
 	}
-	return nil, errors.New("invalid client type")
+	
+	// Increment the active client connections metric
+	GetMetrics().clientConnections.WithLabelValues(name, clientType).Inc()
+	
+	return &Client{
+		name:            name,
+		needPing:        needPing,
+		needManualStart: needManualStart,
+		client:          mcpClient,
+		options:         conf.Options,
+	}, nil
 }
 
 func (c *Client) addToMCPServer(ctx context.Context, clientInfo mcp.Implementation, mcpServer *server.MCPServer) error {
@@ -178,7 +191,31 @@ func (c *Client) addToolsToServer(ctx context.Context, mcpServer *server.MCPServ
 		for _, tool := range tools.Tools {
 			if filterFunc(tool.Name) {
 				log.Printf("<%s> Adding tool %s", c.name, tool.Name)
-				mcpServer.AddTool(tool, c.client.CallTool)
+				
+				// Wrap the CallTool function to add metrics
+				wrappedCallTool := func(ctx context.Context, request mcp.ToolCallRequest) (mcp.ToolCallResponse, error) {
+					toolName := tool.Name
+					startTime := time.Now()
+					
+					// Track the tool call
+					GetMetrics().toolCalls.WithLabelValues(c.name, toolName).Inc()
+					
+					// Call the original function
+					resp, err := c.client.CallTool(ctx, request)
+					
+					// Record the duration
+					duration := time.Since(startTime).Seconds()
+					GetMetrics().toolCallDuration.WithLabelValues(c.name, toolName).Observe(duration)
+					
+					// Track errors if any
+					if err != nil {
+						GetMetrics().toolCallErrors.WithLabelValues(c.name, toolName, "call_error").Inc()
+					}
+					
+					return resp, err
+				}
+				
+				mcpServer.AddTool(tool, wrappedCallTool)
 			}
 		}
 		if tools.NextCursor == "" {
@@ -274,6 +311,28 @@ func (c *Client) addResourceTemplatesToServer(ctx context.Context, mcpServer *se
 
 func (c *Client) Close() error {
 	if c.client != nil {
+		// Determine client type based on how it was created
+		var clientType string
+		
+		// Use creation flags to determine the type instead of transport assertions
+		if c.needManualStart && c.needPing {
+			// For SSE and Streamable clients (both need manual start and ping)
+			// The specific type was set during client creation
+			if strings.Contains(fmt.Sprintf("%T", c.client), "SSE") {
+				clientType = string(MCPClientTypeSSE)
+			} else {
+				clientType = string(MCPClientTypeStreamable)
+			}
+		} else if !c.needManualStart && !c.needPing {
+			// For Stdio clients which need neither ping nor manual start
+			clientType = string(MCPClientTypeStdio)
+		} else {
+			clientType = "unknown"
+		}
+		
+		// Decrement the active client connections metric
+		GetMetrics().clientConnections.WithLabelValues(c.name, clientType).Dec()
+		
 		return c.client.Close()
 	}
 	return nil

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -72,12 +73,95 @@ func recoverMiddleware(prefix string) MiddlewareFunc {
 	}
 }
 
+// metricsMiddleware adds Prometheus metrics for HTTP requests
+func metricsMiddleware() MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			path := r.URL.Path
+			method := r.Method
+
+			// Wrap the response writer to capture status code and response size
+			rww := newResponseWriterWrapper(w)
+
+			// Track request size
+			if r.ContentLength > 0 {
+				GetMetrics().requestSizeBytes.WithLabelValues(method, path).Observe(float64(r.ContentLength))
+			}
+
+			// Track in-progress requests
+			GetMetrics().requestsInProgress.WithLabelValues(method, path).Inc()
+			defer GetMetrics().requestsInProgress.WithLabelValues(method, path).Dec()
+
+			// Call the next handler
+			next.ServeHTTP(rww, r)
+
+			// Record metrics after the request is complete
+			duration := time.Since(start).Seconds()
+			status := rww.statusCode
+
+			GetMetrics().requestDuration.WithLabelValues(method, path).Observe(duration)
+			GetMetrics().requestsTotal.WithLabelValues(method, path, fmt.Sprintf("%d", status)).Inc()
+			
+			if rww.bytesWritten > 0 {
+				GetMetrics().responseSizeBytes.WithLabelValues(method, path).Observe(float64(rww.bytesWritten))
+			}
+		})
+	}
+}
+
+// responseWriterWrapper wraps an http.ResponseWriter to capture metrics
+type responseWriterWrapper struct {
+	http.ResponseWriter
+	statusCode   int
+	bytesWritten int64
+}
+
+func newResponseWriterWrapper(w http.ResponseWriter) *responseWriterWrapper {
+	return &responseWriterWrapper{ResponseWriter: w, statusCode: http.StatusOK}
+}
+
+func (rww *responseWriterWrapper) WriteHeader(statusCode int) {
+	rww.statusCode = statusCode
+	rww.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (rww *responseWriterWrapper) Write(p []byte) (int, error) {
+	n, err := rww.ResponseWriter.Write(p)
+	rww.bytesWritten += int64(n)
+	return n, err
+}
+
 func startHTTPServer(config *Config) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	var errorGroup errgroup.Group
 	httpMux := http.NewServeMux()
+	
+	// Configure metrics based on configuration
+	metricsEnabled := true
+	metricsPath := "/metrics"
+	
+	if config.McpProxy.Options != nil && config.McpProxy.Options.Metrics != nil {
+		metricsEnabled = config.McpProxy.Options.Metrics.Enabled && !config.McpProxy.Options.Metrics.DisableEndpoint
+		if config.McpProxy.Options.Metrics.EndpointPath != "" {
+			metricsPath = config.McpProxy.Options.Metrics.EndpointPath
+		}
+	}
+	
+	// Add Prometheus metrics endpoint if enabled
+	if metricsEnabled {
+		log.Printf("Adding metrics endpoint at %s", metricsPath)
+		httpMux.Handle(metricsPath, promhttp.Handler())
+	}
+	
+	// Add a simple health check endpoint
+	httpMux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+	
 	httpServer := &http.Server{
 		Addr:    config.McpProxy.Addr,
 		Handler: httpMux,
@@ -107,6 +191,16 @@ func startHTTPServer(config *Config) {
 
 			middlewares := make([]MiddlewareFunc, 0)
 			middlewares = append(middlewares, recoverMiddleware(name))
+			
+			// Add metrics middleware if enabled
+			metricsEnabled := true
+			if config.McpProxy.Options != nil && config.McpProxy.Options.Metrics != nil {
+				metricsEnabled = config.McpProxy.Options.Metrics.Enabled
+			}
+			if metricsEnabled {
+				middlewares = append(middlewares, metricsMiddleware())
+			}
+			
 			if clientConfig.Options.LogEnabled.OrElse(false) {
 				middlewares = append(middlewares, loggerMiddleware(name))
 			}

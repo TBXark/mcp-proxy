@@ -9,7 +9,13 @@
       "logEnabled": true,
       "authTokens": [
         "DefaultTokens"
-      ]
+      ],
+      "metrics": {
+        "enabled": true,
+        "collectInterval": "15s",
+        "disableEndpoint": false,
+        "endpointPath": "/metrics"
+      }
     }
   },
   "mcpServers": {

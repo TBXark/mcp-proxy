@@ -94,11 +94,19 @@ type ToolFilterConfig struct {
 	List []string       `json:"list,omitempty"`
 }
 
+type MetricsConfig struct {
+	Enabled          bool   `json:"enabled"`
+	CollectInterval  string `json:"collectInterval,omitempty"` // Duration string, e.g. "15s"
+	DisableEndpoint  bool   `json:"disableEndpoint,omitempty"`
+	EndpointPath     string `json:"endpointPath,omitempty"`    // Default is "/metrics"
+}
+
 type OptionsV2 struct {
 	PanicIfInvalid optional.Field[bool] `json:"panicIfInvalid,omitempty"`
 	LogEnabled     optional.Field[bool] `json:"logEnabled,omitempty"`
 	AuthTokens     []string             `json:"authTokens,omitempty"`
 	ToolFilter     *ToolFilterConfig    `json:"toolFilter,omitempty"`
+	Metrics        *MetricsConfig       `json:"metrics,omitempty"`
 }
 
 type MCPProxyConfigV2 struct {
