@@ -246,8 +246,9 @@ func startHTTPServer(config *Config) error {
 			paths[metricsPath] = "Prometheus metrics endpoint"
 		}
 		
-		// Add MCP server paths
+		// Add MCP server paths with proper SSE endpoints
 		for name := range config.McpServers {
+			// Base route for the MCP server
 			mcpRoute := path.Join(baseURL.Path, name)
 			if !strings.HasPrefix(mcpRoute, "/") {
 				mcpRoute = "/" + mcpRoute
@@ -255,7 +256,14 @@ func startHTTPServer(config *Config) error {
 			if !strings.HasSuffix(mcpRoute, "/") {
 				mcpRoute += "/"
 			}
-			paths[mcpRoute] = fmt.Sprintf("MCP server endpoint for %s", name)
+			
+			// Add SSE endpoint (this is the main connection point)
+			sseEndpoint := mcpRoute + "sse"
+			paths[sseEndpoint] = fmt.Sprintf("SSE connection endpoint for %s MCP service", name)
+			
+			// Add Message endpoint (used internally by the SSE connection)
+			messageEndpoint := mcpRoute + "message"
+			paths[messageEndpoint] = fmt.Sprintf("Message endpoint for %s MCP service (used internally)", name)
 		}
 		
 		response, _ := json.MarshalIndent(paths, "", "  ")
@@ -279,7 +287,14 @@ func startHTTPServer(config *Config) error {
 			if !strings.HasSuffix(mcpRoute, "/") {
 				mcpRoute += "/"
 			}
-			log.Printf("- MCP Endpoint: %s", mcpRoute)
+			
+			// Log the SSE endpoint (this is the main connection point clients should use)
+			sseEndpoint := mcpRoute + "sse"
+			log.Printf("- MCP SSE Endpoint: %s", sseEndpoint)
+			
+			// Log the message endpoint
+			messageEndpoint := mcpRoute + "message"
+			log.Printf("  └─ Message Endpoint: %s (used internally)", messageEndpoint)
 		}
 		log.Printf("- Health Check: /health")
 		if metricsEnabled {
