@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -230,12 +231,61 @@ func startHTTPServer(config *Config) error {
 		})
 	}
 
+	// Add /paths endpoint to show available paths
+	httpMux.HandleFunc("/paths", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		
+		// Basic endpoints
+		paths := map[string]string{
+			"/health": "Health check endpoint",
+			"/paths": "List of available API paths",
+		}
+		
+		// Add metrics endpoint if enabled
+		if metricsEnabled {
+			paths[metricsPath] = "Prometheus metrics endpoint"
+		}
+		
+		// Add MCP server paths
+		for name := range config.McpServers {
+			mcpRoute := path.Join(baseURL.Path, name)
+			if !strings.HasPrefix(mcpRoute, "/") {
+				mcpRoute = "/" + mcpRoute
+			}
+			if !strings.HasSuffix(mcpRoute, "/") {
+				mcpRoute += "/"
+			}
+			paths[mcpRoute] = fmt.Sprintf("MCP server endpoint for %s", name)
+		}
+		
+		response, _ := json.MarshalIndent(paths, "", "  ")
+		w.Write(response)
+	})
+	
 	go func() {
 		err := errorGroup.Wait()
 		if err != nil {
 			log.Fatalf("Failed to add clients: %v", err)
 		}
 		log.Printf("All clients initialized")
+		
+		// Log available paths
+		log.Println("Available API paths:")
+		for name := range config.McpServers {
+			mcpRoute := path.Join(baseURL.Path, name)
+			if !strings.HasPrefix(mcpRoute, "/") {
+				mcpRoute = "/" + mcpRoute
+			}
+			if !strings.HasSuffix(mcpRoute, "/") {
+				mcpRoute += "/"
+			}
+			log.Printf("- MCP Endpoint: %s", mcpRoute)
+		}
+		log.Printf("- Health Check: /health")
+		if metricsEnabled {
+			log.Printf("- Metrics: %s", metricsPath)
+		}
+		log.Printf("- API Paths: /paths")
 	}()
 
 	go func() {
