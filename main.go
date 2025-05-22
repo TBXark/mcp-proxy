@@ -25,5 +25,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
-	startHTTPServer(config)
+	err = startHTTPServer(config)
+	if err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }

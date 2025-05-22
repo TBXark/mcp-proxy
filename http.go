@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -132,7 +134,12 @@ func (rww *responseWriterWrapper) Write(p []byte) (int, error) {
 	return n, err
 }
 
-func startHTTPServer(config *Config) {
+func startHTTPServer(config *Config) error {
+	baseURL, err := url.Parse(config.McpProxy.BaseURL)
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -207,7 +214,14 @@ func startHTTPServer(config *Config) {
 			if len(clientConfig.Options.AuthTokens) > 0 {
 				middlewares = append(middlewares, newAuthMiddleware(clientConfig.Options.AuthTokens))
 			}
-			httpMux.Handle(fmt.Sprintf("/%s/", name), chainMiddleware(server.sseServer, middlewares...))
+			mcpRoute := path.Join(baseURL.Path, name)
+			if !strings.HasPrefix(mcpRoute, "/") {
+				mcpRoute = "/" + mcpRoute
+			}
+			if !strings.HasSuffix(mcpRoute, "/") {
+				mcpRoute += "/"
+			}
+			httpMux.Handle(mcpRoute, chainMiddleware(server.sseServer, middlewares...))
 			httpServer.RegisterOnShutdown(func() {
 				log.Printf("<%s> Shutting down", name)
 				_ = mcpClient.Close()
@@ -242,8 +256,9 @@ func startHTTPServer(config *Config) {
 	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer shutdownCancel()
 
-	err := httpServer.Shutdown(shutdownCtx)
-	if err != nil {
-		log.Printf("Server shutdown error: %v", err)
+	err = httpServer.Shutdown(shutdownCtx)
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
 	}
+	return nil
 }
