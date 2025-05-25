@@ -1,0 +1,197 @@
+{
+  "mcpProxy": {
+    "baseURL": "http://localhost:9090",
+    "addr": ":9090",
+    "name": "MCP Proxy",
+    "version": "1.0.0",
+    "options": {
+      "panicIfInvalid": false,
+      "logEnabled": true,
+      "authTokens": [
+        "your-auth-token-here"
+      ]
+    }
+  },
+  "mcpServers": {
+    "brave-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-brave-search",
+        "--log-level=debug"
+      ],
+      "env": {
+        "BRAVE_API_KEY": "YOUR_BRAVE_API_KEY"
+      }
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github",
+        "--log-level=debug"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "YOUR_GITHUB_TOKEN"
+      },
+      "options": {
+        "toolFilter": {
+          "mode": "allow",
+          "list": [
+            "search_repositories",
+            "create_repository", 
+            "get_file_contents",
+            "push_files",
+            "list_commits",
+            "list_issues",
+            "search_code"
+          ]
+        }
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/username/Desktop",
+        "/Users/username/Downloads",
+        "/Users/username/DevFolder"
+      ],
+      "options": {
+        "toolFilter": {
+          "mode": "allow",
+          "list": [
+            "read_file",
+            "read_multiple_files",
+            "list_directory",
+            "directory_tree",
+            "search_files",
+            "get_file_info"
+          ]
+        }
+      }
+    },
+    "puppeteer": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-puppeteer",
+        "--log-level=debug"
+      ],
+      "options": {
+        "toolFilter": {
+          "mode": "allow",
+          "list": [
+            "puppeteer_screenshot",
+            "puppeteer_navigate",
+            "puppeteer_click",
+            "puppeteer_fill",
+            "puppeteer_select",
+            "puppeteer_hover",
+            "puppeteer_evaluate"
+          ]
+        }
+      }
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "options": {
+        "toolFilter": {
+          "mode": "allow",
+          "list": [
+            "create_entities",
+            "create_relations",
+            "add_observations",
+            "delete_entities",
+            "delete_observations",
+            "delete_relations",
+            "search_nodes",
+            "read_graph",
+            "open_nodes"
+          ]
+        }
+      }
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "git": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-git"
+      ],
+      "env": {
+        "REPO_PATH": "/path/to/your/repo"
+      },
+      "options": {
+        "toolFilter": {
+          "mode": "allow",
+          "list": [
+            "git_status",
+            "git_commit",
+            "git_reset",
+            "git_create_branch",
+            "git_checkout",
+            "git_show",
+            "git_diff",
+            "git_add",
+            "git_log"
+          ]
+        }
+      }
+    },
+    "iterm": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "iterm-mcp"
+      ]
+    },
+    "obsidian": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-obsidian"
+      ],
+      "env": {
+        "VAULT_PATH": "/path/to/your/obsidian/vault"
+      }
+    },
+    "browser-tools": {
+      "command": "npx",
+      "args": [
+        "@agentdeskai/browser-tools-mcp@latest"
+      ],
+      "options": {
+        "toolFilter": {
+          "mode": "allow",
+          "list": [
+            "getConsoleLogs",
+            "getConsoleErrors",
+            "getNetworkErrors",
+            "getNetworkLogs",
+            "takeScreenshot",
+            "getSelectedElement",
+            "runBestPracticesAudit",
+            "runAuditMode",
+            "runDebuggerMode",
+            "runNextJSAudit",
+            "runSEOAudit",
+            "runPerformanceAudit",
+            "runAccessibilityAudit",
+            "wipeLogs"
+          ]
+        }
+      }
+    }
+  }
+}

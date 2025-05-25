@@ -1,0 +1,154 @@
+{
+  "mcpProxy": {
+    "baseURL": "http://localhost:9090",
+    "addr": ":9090",
+    "name": "MCP Proxy Server",
+    "version": "1.0.0",
+    "options": {
+      "panicIfInvalid": false,
+      "logEnabled": true,
+      "authTokens": [
+        "your-auth-token-here"
+      ]
+    }
+  },
+  "mcpServers": {
+    "brave-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-brave-search"
+      ],
+      "env": {
+        "BRAVE_API_KEY": "YOUR_BRAVE_API_KEY"
+      },
+      "options": {
+        "logEnabled": true
+      }
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "YOUR_GITHUB_TOKEN"
+      },
+      "options": {
+        "toolFilter": {
+          "mode": "allow",
+          "list": [
+            "search_repositories",
+            "create_repository",
+            "get_file_contents",
+            "push_files",
+            "list_commits",
+            "list_issues",
+            "search_code"
+          ]
+        }
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/path/to/safe/directory1",
+        "/path/to/safe/directory2"
+      ],
+      "options": {
+        "toolFilter": {
+          "mode": "allow",
+          "list": [
+            "read_file",
+            "read_multiple_files",
+            "list_directory",
+            "directory_tree",
+            "search_files",
+            "get_file_info"
+          ]
+        }
+      }
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "options": {
+        "toolFilter": {
+          "mode": "allow",
+          "list": [
+            "create_entities",
+            "create_relations",
+            "add_observations",
+            "search_nodes",
+            "read_graph"
+          ]
+        }
+      }
+    },
+    "puppeteer": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-puppeteer"
+      ],
+      "options": {
+        "toolFilter": {
+          "mode": "allow",
+          "list": [
+            "puppeteer_screenshot",
+            "puppeteer_navigate",
+            "puppeteer_click",
+            "puppeteer_fill"
+          ]
+        }
+      }
+    },
+    "git": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-git"
+      ],
+      "env": {
+        "REPO_PATH": "/path/to/your/git/repository"
+      },
+      "options": {
+        "toolFilter": {
+          "mode": "allow",
+          "list": [
+            "git_status",
+            "git_log",
+            "git_show",
+            "git_diff"
+          ]
+        }
+      }
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "remote-sse-server": {
+      "url": "https://your-remote-server.com/sse",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      }
+    },
+    "streamable-http-server": {
+      "transportType": "streamable-http",
+      "url": "https://your-streamable-server.com/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      },
+      "timeout": 30
+    }
+  }
+}
