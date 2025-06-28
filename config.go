@@ -134,12 +134,9 @@ type FullConfig struct {
 func load(path string, insecure bool) (*Config, error) {
 	httpClient := http.DefaultClient
 	if insecure {
-		httpClient = &http.Client{
-			Transport: &http.Transport{
-				// Disable TLS verification for insecure connections
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			},
-		}
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		httpClient = &http.Client{Transport: transport}
 	}
 
 	conf, err := confstore.Load[FullConfig](
