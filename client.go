@@ -131,6 +131,9 @@ func (c *Client) startPingTask(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := c.client.Ping(ctx); err != nil {
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return
+				}
 				failCount++
 				log.Printf("<%s> MCP Ping failed: %v (count=%d)", c.name, err, failCount)
 			} else if failCount > 0 {
