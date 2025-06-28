@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/tls"
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/TBXark/confstore"
@@ -129,9 +131,21 @@ type FullConfig struct {
 	McpServers map[string]*MCPClientConfigV2 `json:"mcpServers"`
 }
 
-func load(path string) (*Config, error) {
+func load(path string, insecure bool) (*Config, error) {
+	httpClient := http.DefaultClient
+	if insecure {
+		httpClient = &http.Client{
+			Transport: &http.Transport{
+				// Disable TLS verification for insecure connections
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		}
+	}
 
-	conf, err := confstore.Load[FullConfig](path)
+	conf, err := confstore.Load[FullConfig](
+		path,
+		confstore.WithHTTPClientOption(httpClient),
+	)
 	if err != nil {
 		return nil, err
 	}
