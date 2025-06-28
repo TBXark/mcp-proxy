@@ -119,16 +119,24 @@ func (c *Client) addToMCPServer(ctx context.Context, clientInfo mcp.Implementati
 }
 
 func (c *Client) startPingTask(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
+	interval := 30 * time.Second
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-PingLoop:
+
+	failCount := 0
 	for {
 		select {
 		case <-ctx.Done():
 			log.Printf("<%s> Context done, stopping ping", c.name)
-			break PingLoop
+			return
 		case <-ticker.C:
-			_ = c.client.Ping(ctx)
+			if err := c.client.Ping(ctx); err != nil {
+				failCount++
+				log.Printf("<%s> MCP Ping failed: %v (count=%d)", c.name, err, failCount)
+			} else if failCount > 0 {
+				log.Printf("<%s> MCP Ping recovered after %d failures", c.name, failCount)
+				failCount = 0
+			}
 		}
 	}
 }
