@@ -33,23 +33,24 @@ changelog:
   #
   # Default is no groups.
   groups:
+  groups:
     - title: Features
-      regexp: "^.*feat[(\\w-)]*:+.*$"
+      regexp: '^feat(\([\w-]+\))?!?:.*'
       order: 0
-    - title: "Bug fixes"
-      regexp: "^.*fix[(\\w-)]*:+.*$"
+    - title: "Bug Fixes"
+      regexp: '^fix(\([\w-]+\))?!?:.*'
       order: 1
-    - title: "Enhancements"
-      regexp: "^.*chore[(\\w-)]*:+.*$"
-      order: 2
     - title: "Refactor"
-      regexp: "^.*refactor[(\\w-)]*:+.*$"
+      regexp: '^refactor(\([\w-]+\))?!?:.*'
+      order: 2
+    - title: "Build Process Updates"
+      regexp: '^(build|ci)(\([\w-]+\))?!?:.*'
       order: 3
-    - title: "Build process updates"
-      regexp: ^.*?(build|ci)(\(.+\))??!?:.+$
+    - title: "Documentation Updates"
+      regexp: '^docs(\([\w-]+\))?!?:.*'
       order: 4
-    - title: "Documentation updates"
-      regexp: ^.*?docs?(\(.+\))??!?:.+$
-      order: 4
+    - title: "Maintenance"
+      regexp: '^chore(\([\w-]+\))?!?:.*'
+      order: 5
     - title: Others
       order: 999
