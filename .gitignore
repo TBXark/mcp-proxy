@@ -142,3 +142,7 @@ fabric.properties
 
 /mcp-proxy
 /build
+
+# Configuration files with personal details
+config.json
+*.log

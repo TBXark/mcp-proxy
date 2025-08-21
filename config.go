@@ -56,10 +56,19 @@ type ToolFilterConfig struct {
 	List []string       `json:"list,omitempty"`
 }
 
+type OAuth2Config struct {
+	Enabled           bool              `json:"enabled,omitempty"`
+	Users             map[string]string `json:"users,omitempty"`
+	PersistenceDir    string            `json:"persistenceDir,omitempty"`
+	AllowedIPs        []string          `json:"allowedIPs,omitempty"`
+	TokenExpirationMinutes int           `json:"tokenExpirationMinutes,omitempty"`
+}
+
 type OptionsV2 struct {
 	PanicIfInvalid optional.Field[bool] `json:"panicIfInvalid,omitempty"`
 	LogEnabled     optional.Field[bool] `json:"logEnabled,omitempty"`
 	AuthTokens     []string             `json:"authTokens,omitempty"`
+	OAuth2         *OAuth2Config        `json:"oauth2,omitempty"`
 	ToolFilter     *ToolFilterConfig    `json:"toolFilter,omitempty"`
 }
 
@@ -160,6 +169,9 @@ func load(path string, insecure bool) (*Config, error) {
 		}
 		if clientConfig.Options.AuthTokens == nil {
 			clientConfig.Options.AuthTokens = conf.McpProxy.Options.AuthTokens
+		}
+		if clientConfig.Options.OAuth2 == nil && conf.McpProxy.Options.OAuth2 != nil {
+			clientConfig.Options.OAuth2 = conf.McpProxy.Options.OAuth2
 		}
 		if !clientConfig.Options.PanicIfInvalid.Present() {
 			clientConfig.Options.PanicIfInvalid = conf.McpProxy.Options.PanicIfInvalid
