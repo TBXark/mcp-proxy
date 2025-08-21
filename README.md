@@ -74,7 +74,8 @@ The server is configured using a JSON file. Below is an example configuration:
           "34.162.136.91", 
           "34.162.142.92",
           "34.162.183.95"
-        ]
+        ],
+        "templateDir": "/custom/templates"
       }
     }
   },
@@ -130,6 +131,7 @@ Common options for `mcpProxy` and `mcpServers`.
   - `persistenceDir`: Directory for storing OAuth client registrations. Defaults to `$HOME/.mcpproxy` if not specified.
   - `allowedIPs`: IP addresses permitted to register OAuth clients. Use Claude's official IPs for security. Empty array allows all IPs.
   - `tokenExpirationMinutes`: Access token expiration time in minutes. Defaults to 60 minutes (1 hour) if not specified.
+  - `templateDir`: Base directory for OAuth HTML templates. Server looks for templates in `{templateDir}/oauth/`. Defaults to `templates` if not specified.
 - `toolFilter`: Optional tool filtering configuration. **This configuration is only effective in `mcpServers`.**
   - `mode`: Specifies the filtering mode. Must be explicitly set to `allow` or `block` if `list` is provided. If `list` is present but `mode` is missing or invalid, the filter will be ignored for this server.
   - `list`: A list of tool names to filter (either allow or block based on the `mode`).
@@ -420,9 +422,10 @@ templates/
 
 #### Template Override Behavior
 
-- **No `templates/oauth/` directory**: Uses built-in templates
-- **`templates/oauth/` exists**: Uses external templates with fallback to built-in if loading fails
-- **To revert to built-in**: Simply remove the `templates/` directory
+The server loads templates in this priority order:
+1. **External templates**: `{templateDir}/oauth/*.html` (where `templateDir` is from config, default: `templates`)
+2. **Built-in templates**: Embedded defaults if external templates don't exist or fail to load
+3. **To revert to built-in**: Remove the template directory or set `templateDir` to a non-existent path
 
 #### Template Data
 
@@ -454,7 +457,9 @@ Usage of mcp-proxy:
   -config string
         path to config file or a http(s) url (default "config.json")
   -eject-templates
-        eject OAuth templates to templates/oauth/ directory for customization
+        eject OAuth templates to configured templateDir/oauth/ (or templates/oauth/ if not configured)
+  -eject-templates-to string
+        eject OAuth templates to specified directory (overrides config templateDir)
   -help
         print help and exit
   -insecure

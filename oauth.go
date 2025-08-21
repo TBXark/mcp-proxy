@@ -174,15 +174,22 @@ func NewOAuthServer(baseURL string, accessConfig *OAuth2Config) *OAuthServer {
 	var templates *template.Template
 	var err error
 	
+	// Determine template directory
+	templateDir := "templates/oauth"
+	if accessConfig != nil && accessConfig.TemplateDir != "" {
+		templateDir = filepath.Join(accessConfig.TemplateDir, "oauth")
+	}
+	
 	// First try to load external templates (for customization)
-	if _, statErr := os.Stat("templates/oauth"); statErr == nil {
-		log.Printf("OAuth: Found external templates directory, loading custom templates")
-		templates, err = template.ParseGlob("templates/oauth/*.html")
+	if _, statErr := os.Stat(templateDir); statErr == nil {
+		templateGlob := filepath.Join(templateDir, "*.html")
+		log.Printf("OAuth: Found external templates directory at '%s', loading custom templates", templateDir)
+		templates, err = template.ParseGlob(templateGlob)
 		if err != nil {
-			log.Printf("OAuth: Failed to load external templates: %v", err)
+			log.Printf("OAuth: Failed to load external templates from '%s': %v", templateDir, err)
 			log.Printf("OAuth: Falling back to built-in templates")
 		} else {
-			log.Printf("OAuth: Successfully loaded external templates")
+			log.Printf("OAuth: Successfully loaded external templates from '%s'", templateDir)
 		}
 	}
 	

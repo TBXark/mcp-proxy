@@ -16,6 +16,7 @@ func main() {
 	version := flag.Bool("version", false, "print version and exit")
 	help := flag.Bool("help", false, "print help and exit")
 	ejectTemplates := flag.Bool("eject-templates", false, "eject OAuth templates to templates/oauth/ directory for customization")
+	ejectTemplatesTo := flag.String("eject-templates-to", "", "eject OAuth templates to specified directory (overrides config templateDir)")
 	flag.Parse()
 	if *help {
 		flag.Usage()
@@ -25,8 +26,27 @@ func main() {
 		fmt.Println(BuildVersion)
 		return
 	}
-	if *ejectTemplates {
-		if err := ejectOAuthTemplates(); err != nil {
+	if *ejectTemplates || *ejectTemplatesTo != "" {
+		var templateDir string
+		
+		if *ejectTemplatesTo != "" {
+			// Use specified directory directly
+			templateDir = *ejectTemplatesTo
+		} else {
+			// Load config to get templateDir if configured
+			config, err := load(*conf, *insecure)
+			if err != nil {
+				log.Printf("Warning: Failed to load config for template directory: %v", err)
+				log.Printf("Using default templates directory")
+				templateDir = "templates"
+			} else if config.McpProxy.Options != nil && config.McpProxy.Options.OAuth2 != nil && config.McpProxy.Options.OAuth2.TemplateDir != "" {
+				templateDir = config.McpProxy.Options.OAuth2.TemplateDir
+			} else {
+				templateDir = "templates"
+			}
+		}
+		
+		if err := ejectOAuthTemplates(templateDir); err != nil {
 			log.Fatalf("Failed to eject templates: %v", err)
 		}
 		return
@@ -41,8 +61,8 @@ func main() {
 	}
 }
 
-func ejectOAuthTemplates() error {
-	templatesDir := "templates/oauth"
+func ejectOAuthTemplates(baseTemplateDir string) error {
+	templatesDir := filepath.Join(baseTemplateDir, "oauth")
 	
 	// Create templates directory
 	if err := os.MkdirAll(templatesDir, 0755); err != nil {
