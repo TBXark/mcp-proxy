@@ -81,11 +81,11 @@ func newOAuth2Middleware(oauth2Config *OAuth2Config, oauthServer *OAuthServer) M
 				}
 
 				// Add token info to request context for potential use
-				r.Header.Set("X-OAuth-Client-ID", accessToken.ClientID)
-				r.Header.Set("X-OAuth-Scope", accessToken.Scope)
-				r.Header.Set("X-OAuth-Resource", accessToken.Resource)
+				ctx := context.WithValue(r.Context(), "X-OAuth-Client-ID", accessToken.ClientID)
+				ctx = context.WithValue(ctx, "X-OAuth-Scope", accessToken.Scope)
+				ctx = context.WithValue(ctx, "X-OAuth-Resource", accessToken.Resource)
 
-				next.ServeHTTP(w, r)
+				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
 
