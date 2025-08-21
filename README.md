@@ -19,6 +19,8 @@ make build
 ./build/mcp-proxy --config path/to/config.json
 ```
 
+**Note**: OAuth templates are built-in by default. Use `--eject-templates` to customize them.
+
 ### Install by go
 
 ```bash
@@ -392,14 +394,71 @@ Once your proxy is running with OAuth enabled, configure Claude Desktop:
 }
 ```
 
+### OAuth Template Customization
+
+The OAuth 2.1 server includes built-in HTML templates for the authorization and success pages, with support for customization.
+
+#### Built-in Templates
+
+By default, the OAuth templates are embedded in the binary and require no external files. The server automatically uses these built-in templates.
+
+#### Ejecting Templates for Customization
+
+To customize the OAuth pages, first eject the templates:
+
+```bash
+./mcp-proxy --eject-templates
+```
+
+This creates:
+```
+templates/
+└── oauth/
+    ├── authorize.html    # Login form page
+    └── success.html      # Success/redirect page
+```
+
+#### Template Override Behavior
+
+- **No `templates/oauth/` directory**: Uses built-in templates
+- **`templates/oauth/` exists**: Uses external templates with fallback to built-in if loading fails
+- **To revert to built-in**: Simply remove the `templates/` directory
+
+#### Template Data
+
+**authorize.html** receives:
+- `ClientName` - Application name (usually "Claude")
+- `ResourceName` - Resource being accessed  
+- `ClientID`, `RedirectURI`, `ResponseType`, `Scope`, `State`, `CodeChallenge`, `Resource` - OAuth parameters
+- `ErrorMessage` - Error message to display (if any)
+
+**success.html** receives:
+- `Username` - Authenticated user's username
+- `RedirectURL` - Complete redirect URL with authorization code
+
+#### Customizing Templates
+
+After ejecting templates:
+
+1. Edit the HTML files in `templates/oauth/`
+2. Maintain the form structure and hidden fields in `authorize.html`
+3. Keep the JavaScript redirect functionality in `success.html`
+4. Restart the proxy server to reload templates
+
+The templates use Go's `html/template` package with automatic XSS protection and context-aware escaping.
+
 ## Usage
 
 ```bash
 Usage of mcp-proxy:
   -config string
         path to config file or a http(s) url (default "config.json")
+  -eject-templates
+        eject OAuth templates to templates/oauth/ directory for customization
   -help
         print help and exit
+  -insecure
+        allow insecure HTTPS connections by skipping TLS certificate verification
   -version
         print version and exit
 ```
