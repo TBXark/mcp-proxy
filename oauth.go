@@ -305,24 +305,39 @@ const successPageTemplate = `<!DOCTYPE html>
         let countdown = 3;
         
         function updateCountdown() {
-            document.getElementById('countdown').textContent = countdown;
+            const countdownElement = document.getElementById('countdown');
+            const redirectTextElement = document.getElementById('redirect-text');
+            
+            if (countdownElement) {
+                countdownElement.textContent = countdown;
+            }
             countdown--;
             
             if (countdown < 0) {
-                document.getElementById('redirect-text').textContent = 'Redirecting now...';
+                if (redirectTextElement) {
+                    redirectTextElement.textContent = 'Redirecting now...';
+                }
                 window.location.href = '{{.RedirectURL}}';
             } else {
                 setTimeout(updateCountdown, 1000);
             }
         }
         
-        // Fallback for manual redirect after 10 seconds
-        setTimeout(function() {
-            document.getElementById('manual-redirect').style.display = 'block';
-        }, 10000);
+        function showManualRedirect() {
+            const manualRedirectElement = document.getElementById('manual-redirect');
+            if (manualRedirectElement) {
+                manualRedirectElement.style.display = 'block';
+            }
+        }
         
-        // Start countdown immediately
-        updateCountdown();
+        // Wait for DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Start countdown after DOM is ready
+            updateCountdown();
+            
+            // Fallback for manual redirect after 10 seconds
+            setTimeout(showManualRedirect, 10000);
+        });
     </script>
 </head>
 <body>
