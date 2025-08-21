@@ -30,6 +30,9 @@ type OAuthServer struct {
 	persistenceFile string
 	accessConfig    *OAuth2Config
 	templates       *template.Template
+	templateDir     string
+	useExternalTemplates bool
+	templateModTimes map[string]time.Time
 }
 
 type OAuthClient struct {
@@ -180,16 +183,32 @@ func NewOAuthServer(baseURL string, accessConfig *OAuth2Config) *OAuthServer {
 		templateDir = filepath.Join(accessConfig.TemplateDir, "oauth")
 	}
 	
+	var useExternalTemplates bool
+	var templateModTimes map[string]time.Time
+	
 	// First try to load external templates (for customization)
 	if _, statErr := os.Stat(templateDir); statErr == nil {
 		templateGlob := filepath.Join(templateDir, "*.html")
-		log.Printf("OAuth: Found external templates directory at '%s', loading custom templates", templateDir)
+		log.Printf("OAuth: Found external templates directory at '%s', loading custom templates with hot reload", templateDir)
 		templates, err = template.ParseGlob(templateGlob)
 		if err != nil {
 			log.Printf("OAuth: Failed to load external templates from '%s': %v", templateDir, err)
 			log.Printf("OAuth: Falling back to built-in templates")
 		} else {
 			log.Printf("OAuth: Successfully loaded external templates from '%s'", templateDir)
+			useExternalTemplates = true
+			templateModTimes = make(map[string]time.Time)
+			
+			// Record initial modification times
+			authPath := filepath.Join(templateDir, "authorize.html")
+			successPath := filepath.Join(templateDir, "success.html")
+			
+			if authStat, err := os.Stat(authPath); err == nil {
+				templateModTimes["authorize.html"] = authStat.ModTime()
+			}
+			if successStat, err := os.Stat(successPath); err == nil {
+				templateModTimes["success.html"] = successStat.ModTime()
+			}
 		}
 	}
 	
@@ -216,14 +235,17 @@ func NewOAuthServer(baseURL string, accessConfig *OAuth2Config) *OAuthServer {
 	}
 
 	server := &OAuthServer{
-		baseURL:         baseURL,
-		clients:         make(map[string]*OAuthClient),
-		authCodes:       make(map[string]*AuthorizationCode),
-		accessTokens:    make(map[string]*AccessToken),
-		tokenExpiration: tokenExpiration,
-		persistenceFile: persistenceFile,
-		accessConfig:    accessConfig,
-		templates:       templates,
+		baseURL:              baseURL,
+		clients:              make(map[string]*OAuthClient),
+		authCodes:            make(map[string]*AuthorizationCode),
+		accessTokens:         make(map[string]*AccessToken),
+		tokenExpiration:      tokenExpiration,
+		persistenceFile:      persistenceFile,
+		accessConfig:         accessConfig,
+		templates:            templates,
+		templateDir:          templateDir,
+		useExternalTemplates: useExternalTemplates,
+		templateModTimes:     templateModTimes,
 	}
 	
 	// Load persisted clients
@@ -324,6 +346,48 @@ func (s *OAuthServer) saveClients() {
 	
 	log.Printf("OAuth: Saved %d clients, %d access tokens to persistence file", 
 		len(clients), len(accessTokens))
+}
+
+func (s *OAuthServer) reloadTemplatesIfChanged() {
+	if !s.useExternalTemplates || s.templateDir == "" {
+		return // Nothing to reload for built-in templates
+	}
+	
+	// Check modification times
+	authPath := filepath.Join(s.templateDir, "authorize.html")
+	successPath := filepath.Join(s.templateDir, "success.html")
+	
+	var needReload bool
+	
+	// Check authorize.html
+	if authStat, err := os.Stat(authPath); err == nil {
+		if lastMod, exists := s.templateModTimes["authorize.html"]; !exists || authStat.ModTime().After(lastMod) {
+			s.templateModTimes["authorize.html"] = authStat.ModTime()
+			needReload = true
+		}
+	}
+	
+	// Check success.html
+	if successStat, err := os.Stat(successPath); err == nil {
+		if lastMod, exists := s.templateModTimes["success.html"]; !exists || successStat.ModTime().After(lastMod) {
+			s.templateModTimes["success.html"] = successStat.ModTime()
+			needReload = true
+		}
+	}
+	
+	if needReload {
+		log.Printf("OAuth: Template files changed, reloading from '%s'", s.templateDir)
+		
+		// Reload templates
+		templateGlob := filepath.Join(s.templateDir, "*.html")
+		if newTemplates, err := template.ParseGlob(templateGlob); err != nil {
+			log.Printf("OAuth: Failed to reload templates: %v", err)
+			// Keep using existing templates
+		} else {
+			s.templates = newTemplates
+			log.Printf("OAuth: Templates reloaded successfully")
+		}
+	}
 }
 
 func (s *OAuthServer) generateRandomString(length int) string {
@@ -542,6 +606,9 @@ func (s *OAuthServer) handleAuthorizationGET(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *OAuthServer) showAuthorizationPage(w http.ResponseWriter, r *http.Request, clientID, redirectURI, responseType, scope, state, codeChallenge, resource, errorMsg string) {
+	// Check for template updates if using external templates
+	s.reloadTemplatesIfChanged()
+	
 	// Skip client validation at authorization endpoint per Claude DCR spec
 	// Client validation will happen at token endpoint where invalid_client triggers re-registration
 	log.Printf("OAuth: Authorization request for client_id '%s' - proceeding to login", clientID)
@@ -643,6 +710,9 @@ func (s *OAuthServer) handleAuthorizationPOST(w http.ResponseWriter, r *http.Req
 }
 
 func (s *OAuthServer) showSuccessPage(w http.ResponseWriter, r *http.Request, redirectURI, code, state, username string) {
+	// Check for template updates if using external templates
+	s.reloadTemplatesIfChanged()
+	
 	// Build redirect URL
 	redirectURL, _ := url.Parse(redirectURI)
 	params := redirectURL.Query()

@@ -427,6 +427,17 @@ The server loads templates in this priority order:
 2. **Built-in templates**: Embedded defaults if external templates don't exist or fail to load
 3. **To revert to built-in**: Remove the template directory or set `templateDir` to a non-existent path
 
+#### Hot Reloading
+
+When using external templates, the server automatically detects file changes and reloads templates **without requiring a restart**:
+
+- **Automatic detection**: Checks file modification times on every OAuth request
+- **Zero-config**: Hot reloading is always enabled for external templates
+- **Live development**: Edit templates and see changes immediately in your browser
+- **Fallback protection**: If reloading fails, continues using the previous templates
+
+This makes template customization seamless during development and testing.
+
 #### Template Data
 
 **authorize.html** receives:
