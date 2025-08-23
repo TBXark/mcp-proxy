@@ -11,7 +11,11 @@ build:
 
 .PHONY: buildLinuxX86
 buildLinuxX86:
-	GOOS=linux GOARCH=amd64 $(GO_BUILD) -o $(BUILD_DIR)/ ./...
+	GOOS=linux GOARCH=amd64 $(GO_BUILD) -o $(BUILD_DIR) ./...
+
+.PHONY: buildMacIntel
+buildMacIntel:
+	GOOS=darwin GOARCH=amd64 $(GO_BUILD) -o $(BUILD_DIR)/mcp-proxy-intel ./...
 
 .PHONY: buildImage
 buildImage:
