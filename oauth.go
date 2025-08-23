@@ -1097,15 +1097,15 @@ func (s *OAuthServer) ValidateToken(tokenString string) (*AccessToken, bool) {
 	}
 
 	if time.Now().After(token.ExpiresAt) {
-		// Token expired, clean it up
-		go func() {
-			s.mutex.Lock()
-			delete(s.accessTokens, tokenString)
-			s.mutex.Unlock()
-			
-			// Persist cleanup to disk
-			s.saveClients()
-		}()
+		// Token expired, clean it up synchronously to prevent race conditions
+		s.mutex.RUnlock() // Release read lock
+		s.mutex.Lock()    // Acquire write lock
+		delete(s.accessTokens, tokenString)
+		s.mutex.Unlock()
+		
+		// Persist cleanup to disk
+		s.saveClients()
+		
 		return nil, false
 	}
 
