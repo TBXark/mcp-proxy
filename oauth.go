@@ -1089,10 +1089,10 @@ func (s *OAuthServer) handleRefreshToken(w http.ResponseWriter, r *http.Request,
 // Token Validation
 func (s *OAuthServer) ValidateToken(tokenString string) (*AccessToken, bool) {
 	s.mutex.RLock()
-	defer s.mutex.RUnlock()
 
 	token, exists := s.accessTokens[tokenString]
 	if !exists {
+		s.mutex.RUnlock()
 		return nil, false
 	}
 
@@ -1109,6 +1109,7 @@ func (s *OAuthServer) ValidateToken(tokenString string) (*AccessToken, bool) {
 		return nil, false
 	}
 
+	s.mutex.RUnlock()
 	return token, true
 }
 
