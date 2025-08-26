@@ -50,6 +50,50 @@ func newAuthMiddleware(tokens []string) MiddlewareFunc {
 	}
 }
 
+func newOAuth2Middleware(oauth2Config *OAuth2Config, oauthServer *OAuthServer) MiddlewareFunc {
+	if oauth2Config == nil || !oauth2Config.Enabled {
+		return func(next http.Handler) http.Handler {
+			return next
+		}
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" {
+				http.Error(w, "Missing Authorization header", http.StatusUnauthorized)
+				return
+			}
+
+			// Check for Bearer token (OAuth 2.1)
+			if strings.HasPrefix(authHeader, "Bearer ") {
+				token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+				if token == "" {
+					http.Error(w, "Missing access token", http.StatusUnauthorized)
+					return
+				}
+
+				// Validate token with OAuth server
+				accessToken, valid := oauthServer.ValidateToken(token)
+				if !valid {
+					http.Error(w, "Invalid or expired access token", http.StatusUnauthorized)
+					return
+				}
+
+				// Add token info to request context for potential use
+				ctx := context.WithValue(r.Context(), "X-OAuth-Client-ID", accessToken.ClientID)
+				ctx = context.WithValue(ctx, "X-OAuth-Scope", accessToken.Scope)
+				ctx = context.WithValue(ctx, "X-OAuth-Resource", accessToken.Resource)
+
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
+			http.Error(w, "Unsupported authorization method. Use Bearer token", http.StatusUnauthorized)
+		})
+	}
+}
+
 func loggerMiddleware(prefix string) MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -92,6 +136,16 @@ func startHTTPServer(config *Config) error {
 		Name: config.McpProxy.Name,
 	}
 
+	// Create OAuth 2.1 server with access control config
+	var oauthAccessConfig *OAuth2Config
+	if config.McpProxy.Options != nil && config.McpProxy.Options.OAuth2 != nil {
+		oauthAccessConfig = config.McpProxy.Options.OAuth2
+	}
+	oauthServer := NewOAuthServer(config.McpProxy.BaseURL, oauthAccessConfig)
+	
+	// Register OAuth routes
+	oauthServer.RegisterRoutes(httpMux)
+
 	for name, clientConfig := range config.McpServers {
 		mcpClient, err := newMCPClient(name, clientConfig)
 		if err != nil {
@@ -118,18 +172,45 @@ func startHTTPServer(config *Config) error {
 			if clientConfig.Options.LogEnabled.OrElse(false) {
 				middlewares = append(middlewares, loggerMiddleware(name))
 			}
-			if len(clientConfig.Options.AuthTokens) > 0 {
+
+			// Apply authentication middleware based on proxy configuration
+			// OAuth2 authentication applies when the proxy itself uses streamable-http transport
+			if config.McpProxy.Type == MCPServerTypeStreamable && config.McpProxy.Options.OAuth2 != nil && config.McpProxy.Options.OAuth2.Enabled {
+				middlewares = append(middlewares, newOAuth2Middleware(config.McpProxy.Options.OAuth2, oauthServer))
+			} else if len(clientConfig.Options.AuthTokens) > 0 {
+				// Fall back to token authentication if OAuth2 is not configured
 				middlewares = append(middlewares, newAuthMiddleware(clientConfig.Options.AuthTokens))
 			}
 			mcpRoute := path.Join(baseURL.Path, name)
+			log.Printf("<%s> baseURL.Path='%s', name='%s', initial mcpRoute='%s'", name, baseURL.Path, name, mcpRoute)
+			
 			if !strings.HasPrefix(mcpRoute, "/") {
 				mcpRoute = "/" + mcpRoute
 			}
-			if !strings.HasSuffix(mcpRoute, "/") {
-				mcpRoute += "/"
-			}
-			log.Printf("<%s> Handling requests at %s", name, mcpRoute)
-			httpMux.Handle(mcpRoute, chainMiddleware(server.handler, middlewares...))
+			
+			baseHandler := chainMiddleware(server.handler, middlewares...)
+			
+			// Register exact paths to avoid Go's automatic redirect behavior
+			mcpRouteWithoutSlash := strings.TrimSuffix(mcpRoute, "/")
+			mcpRouteWithSlash := mcpRouteWithoutSlash + "/"
+			
+			log.Printf("<%s> Registering exact routes: '%s' and '%s'", name, mcpRouteWithoutSlash, mcpRouteWithSlash)
+			
+			// Register both exact patterns
+			httpMux.HandleFunc(mcpRouteWithoutSlash, func(w http.ResponseWriter, r *http.Request) {
+				// Only handle exact matches to prevent Go's redirect behavior
+				if r.URL.Path == mcpRouteWithoutSlash {
+					baseHandler.ServeHTTP(w, r)
+				} else {
+					http.NotFound(w, r)
+				}
+			})
+			
+			httpMux.HandleFunc(mcpRouteWithSlash, func(w http.ResponseWriter, r *http.Request) {
+				baseHandler.ServeHTTP(w, r)
+			})
+			
+			log.Printf("<%s> Routes registered successfully", name)
 			httpServer.RegisterOnShutdown(func() {
 				log.Printf("<%s> Shutting down", name)
 				_ = mcpClient.Close()

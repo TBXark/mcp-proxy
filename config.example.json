@@ -10,7 +10,23 @@
       "logEnabled": true,
       "authTokens": [
         "DefaultTokens"
-      ]
+      ],
+      "oauth2": {
+        "enabled": true,
+        "users": {
+          "admin": "password123",
+          "user": "mypassword"
+        },
+        "persistenceDir": "/custom/path/oauth",
+        "allowedIPs": [
+          "34.162.46.92",
+          "34.162.102.82",
+          "34.162.136.91", 
+          "34.162.142.92",
+          "34.162.183.95"
+        ],
+        "templateDir": "/custom/templates"
+      }
     }
   },
   "mcpServers": {
