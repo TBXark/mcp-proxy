@@ -27,6 +27,7 @@ type OAuthServer struct {
 	accessTokens    map[string]*AccessToken
 	mutex           sync.RWMutex
 	tokenExpiration time.Duration
+	disableTokenExpiration bool
 	persistenceFile string
 	accessConfig    *OAuth2Config
 	templates       *template.Template
@@ -168,9 +169,17 @@ func NewOAuthServer(baseURL string, accessConfig *OAuth2Config) *OAuthServer {
 	
 	// Set token expiration from config or default to 1 hour
 	tokenExpiration := time.Hour // Default 1 hour
-	if accessConfig != nil && accessConfig.TokenExpirationMinutes > 0 {
-		tokenExpiration = time.Duration(accessConfig.TokenExpirationMinutes) * time.Minute
-		log.Printf("OAuth: Using custom token expiration: %v", tokenExpiration)
+	disableTokenExpiration := false
+	
+	if accessConfig != nil {
+		if accessConfig.DisableTokenExpiration {
+			disableTokenExpiration = true
+			tokenExpiration = 100 * 365 * 24 * time.Hour // Set to 100 years
+			log.Printf("OAuth: Token expiration disabled - tokens will not expire")
+		} else if accessConfig.TokenExpirationMinutes > 0 {
+			tokenExpiration = time.Duration(accessConfig.TokenExpirationMinutes) * time.Minute
+			log.Printf("OAuth: Using custom token expiration: %v", tokenExpiration)
+		}
 	}
 
 	// Load templates with fallback mechanism
@@ -240,6 +249,7 @@ func NewOAuthServer(baseURL string, accessConfig *OAuth2Config) *OAuthServer {
 		authCodes:            make(map[string]*AuthorizationCode),
 		accessTokens:         make(map[string]*AccessToken),
 		tokenExpiration:      tokenExpiration,
+		disableTokenExpiration: disableTokenExpiration,
 		persistenceFile:      persistenceFile,
 		accessConfig:         accessConfig,
 		templates:            templates,
@@ -278,13 +288,19 @@ func (s *OAuthServer) loadClients() {
 		s.mutex.Lock()
 		s.clients = persistenceData.Clients
 		
-		// Load tokens, filtering out expired ones
+		// Load tokens, filtering out expired ones only if expiration is enabled
 		validAccessTokens := make(map[string]*AccessToken)
 		
-		now := time.Now()
-		for token, accessToken := range persistenceData.AccessTokens {
-			if accessToken.ExpiresAt.After(now) {
-				validAccessTokens[token] = accessToken
+		if s.disableTokenExpiration {
+			// Keep all tokens if expiration is disabled
+			validAccessTokens = persistenceData.AccessTokens
+		} else {
+			// Filter out expired tokens
+			now := time.Now()
+			for token, accessToken := range persistenceData.AccessTokens {
+				if accessToken.ExpiresAt.After(now) {
+					validAccessTokens[token] = accessToken
+				}
 			}
 		}
 		
@@ -517,12 +533,25 @@ func (s *OAuthServer) handleClientRegistration(w http.ResponseWriter, r *http.Re
 	
 	for _, uri := range req.RedirectURIs {
 		validURI := false
+		
+		// Check exact matches first
 		for _, allowed := range allowedCallbackURLs {
 			if uri == allowed {
 				validURI = true
 				break
 			}
 		}
+		
+		// If not an exact match, check if it's a localhost callback for Claude Code
+		if !validURI {
+			if parsedURI, err := url.Parse(uri); err == nil {
+				if parsedURI.Scheme == "http" && 
+				   parsedURI.Hostname() == "localhost" {
+					validURI = true
+				}
+			}
+		}
+		
 		if !validURI {
 			log.Printf("OAuth: Client registration failed - invalid redirect URI: %s", uri)
 			s.writeOAuthError(w, "invalid_redirect_uri", "Redirect URI not allowed", http.StatusBadRequest)
@@ -874,10 +903,16 @@ func (s *OAuthServer) handleToken(w http.ResponseWriter, r *http.Request) {
 	// Persist tokens to disk
 	s.saveClients()
 
+	// Set expires_in to 0 when expiration is disabled (RFC 6749 - 0 means no expiration)
+	expiresIn := int(s.tokenExpiration.Seconds())
+	if s.disableTokenExpiration {
+		expiresIn = 0
+	}
+	
 	response := TokenResponse{
 		AccessToken:  accessToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    int(s.tokenExpiration.Seconds()),
+		ExpiresIn:    expiresIn,
 		RefreshToken: refreshToken,
 		Scope:        authCode.Scope,
 	}
@@ -1074,10 +1109,16 @@ func (s *OAuthServer) handleRefreshToken(w http.ResponseWriter, r *http.Request,
 	
 	log.Printf("OAuth: Refreshed tokens for client %s", clientID)
 	
+	// Set expires_in to 0 when expiration is disabled (RFC 6749 - 0 means no expiration)
+	expiresIn := int(s.tokenExpiration.Seconds())
+	if s.disableTokenExpiration {
+		expiresIn = 0
+	}
+	
 	response := TokenResponse{
 		AccessToken:  newAccessToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    int(s.tokenExpiration.Seconds()),
+		ExpiresIn:    expiresIn,
 		RefreshToken: newRefreshToken,
 		Scope:        oldToken.Scope,
 	}
@@ -1096,7 +1137,8 @@ func (s *OAuthServer) ValidateToken(tokenString string) (*AccessToken, bool) {
 		return nil, false
 	}
 
-	if time.Now().After(token.ExpiresAt) {
+	// Skip expiration check if token expiration is disabled
+	if !s.disableTokenExpiration && time.Now().After(token.ExpiresAt) {
 		// Token expired, clean it up synchronously to prevent race conditions
 		s.mutex.RUnlock() // Release read lock
 		s.mutex.Lock()    // Acquire write lock

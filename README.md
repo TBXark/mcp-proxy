@@ -131,6 +131,7 @@ Common options for `mcpProxy` and `mcpServers`.
   - `persistenceDir`: Directory for storing OAuth client registrations. Defaults to `$HOME/.mcpproxy` if not specified.
   - `allowedIPs`: IP addresses permitted to register OAuth clients. Use Claude's official IPs for security. Empty array allows all IPs.
   - `tokenExpirationMinutes`: Access token expiration time in minutes. Defaults to 60 minutes (1 hour) if not specified.
+  - `disableTokenExpiration`: When set to `true`, disables token expiration entirely. Tokens will never expire. Overrides `tokenExpirationMinutes` setting.
   - `templateDir`: Base directory for OAuth HTML templates. Server looks for templates in `{templateDir}/oauth/`. Defaults to `templates` if not specified.
 - `toolFilter`: Optional tool filtering configuration. **This configuration is only effective in `mcpServers`.**
   - `mode`: Specifies the filtering mode. Must be explicitly set to `allow` or `block` if `list` is provided. If `list` is present but `mode` is missing or invalid, the filter will be ignored for this server.
@@ -354,7 +355,8 @@ You can restrict OAuth client registration to specific IP addresses for enhanced
           "test": "test123"
         },
         "allowedIPs": [],
-        "tokenExpirationMinutes": 60
+        "tokenExpirationMinutes": 60,
+        "disableTokenExpiration": false
       }
     }
   }

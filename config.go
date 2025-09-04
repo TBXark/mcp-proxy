@@ -62,6 +62,7 @@ type OAuth2Config struct {
 	PersistenceDir    string            `json:"persistenceDir,omitempty"`
 	AllowedIPs        []string          `json:"allowedIPs,omitempty"`
 	TokenExpirationMinutes int           `json:"tokenExpirationMinutes,omitempty"`
+	DisableTokenExpiration bool          `json:"disableTokenExpiration,omitempty"`
 	TemplateDir       string            `json:"templateDir,omitempty"`
 }
 
