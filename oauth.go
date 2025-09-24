@@ -172,7 +172,7 @@ func NewOAuthServer(baseURL string, accessConfig *OAuth2Config) *OAuthServer {
 	disableTokenExpiration := false
 	
 	if accessConfig != nil {
-		if accessConfig.DisableTokenExpiration {
+		if accessConfig.DisableTokenExpiration || accessConfig.TokenExpirationMinutes == 0 {
 			disableTokenExpiration = true
 			tokenExpiration = 100 * 365 * 24 * time.Hour // Set to 100 years
 			log.Printf("OAuth: Token expiration disabled - tokens will not expire")
@@ -545,8 +545,8 @@ func (s *OAuthServer) handleClientRegistration(w http.ResponseWriter, r *http.Re
 		// If not an exact match, check if it's a localhost callback for Claude Code
 		if !validURI {
 			if parsedURI, err := url.Parse(uri); err == nil {
-				if parsedURI.Scheme == "http" && 
-				   parsedURI.Hostname() == "localhost" {
+				if parsedURI.Scheme == "http" &&
+				   (parsedURI.Hostname() == "localhost" || parsedURI.Hostname() == "127.0.0.1") {
 					validURI = true
 				}
 			}

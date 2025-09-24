@@ -50,11 +50,11 @@ func newAuthMiddleware(tokens []string) MiddlewareFunc {
 	}
 }
 
-func newOAuth2Middleware(oauth2Config *OAuth2Config, oauthServer *OAuthServer) MiddlewareFunc {
-	if oauth2Config == nil || !oauth2Config.Enabled {
-		return func(next http.Handler) http.Handler {
-			return next
-		}
+func newCombinedAuthMiddleware(authTokens []string, oauth2Config *OAuth2Config, oauthServer *OAuthServer) MiddlewareFunc {
+	// Create token set for fast lookup
+	tokenSet := make(map[string]struct{}, len(authTokens))
+	for _, token := range authTokens {
+		tokenSet[token] = struct{}{}
 	}
 
 	return func(next http.Handler) http.Handler {
@@ -65,7 +65,7 @@ func newOAuth2Middleware(oauth2Config *OAuth2Config, oauthServer *OAuthServer) M
 				return
 			}
 
-			// Check for Bearer token (OAuth 2.1)
+			// Check for Bearer token
 			if strings.HasPrefix(authHeader, "Bearer ") {
 				token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
 				if token == "" {
@@ -73,19 +73,32 @@ func newOAuth2Middleware(oauth2Config *OAuth2Config, oauthServer *OAuthServer) M
 					return
 				}
 
-				// Validate token with OAuth server
-				accessToken, valid := oauthServer.ValidateToken(token)
-				if !valid {
-					http.Error(w, "Invalid or expired access token", http.StatusUnauthorized)
-					return
+				// First, try predefined auth tokens (fastest check)
+				if len(authTokens) > 0 {
+					if _, ok := tokenSet[token]; ok {
+						log.Printf("Request authenticated with predefined bearer token")
+						next.ServeHTTP(w, r)
+						return
+					}
 				}
 
-				// Add token info to request context for potential use
-				ctx := context.WithValue(r.Context(), "X-OAuth-Client-ID", accessToken.ClientID)
-				ctx = context.WithValue(ctx, "X-OAuth-Scope", accessToken.Scope)
-				ctx = context.WithValue(ctx, "X-OAuth-Resource", accessToken.Resource)
+				// Second, try OAuth validation if enabled
+				if oauth2Config != nil && oauth2Config.Enabled && oauthServer != nil {
+					accessToken, valid := oauthServer.ValidateToken(token)
+					if valid {
+						log.Printf("Request authenticated with OAuth token for client: %s", accessToken.ClientID)
+						// Add token info to request context for potential use
+						ctx := context.WithValue(r.Context(), "X-OAuth-Client-ID", accessToken.ClientID)
+						ctx = context.WithValue(ctx, "X-OAuth-Scope", accessToken.Scope)
+						ctx = context.WithValue(ctx, "X-OAuth-Resource", accessToken.Resource)
 
-				next.ServeHTTP(w, r.WithContext(ctx))
+						next.ServeHTTP(w, r.WithContext(ctx))
+						return
+					}
+				}
+
+				// If neither auth method worked
+				http.Error(w, "Invalid or expired access token", http.StatusUnauthorized)
 				return
 			}
 
@@ -173,12 +186,16 @@ func startHTTPServer(config *Config) error {
 				middlewares = append(middlewares, loggerMiddleware(name))
 			}
 
-			// Apply authentication middleware based on proxy configuration
-			// OAuth2 authentication applies when the proxy itself uses streamable-http transport
-			if config.McpProxy.Type == MCPServerTypeStreamable && config.McpProxy.Options.OAuth2 != nil && config.McpProxy.Options.OAuth2.Enabled {
-				middlewares = append(middlewares, newOAuth2Middleware(config.McpProxy.Options.OAuth2, oauthServer))
+			// Apply combined authentication middleware (supports both predefined tokens and OAuth)
+			if config.McpProxy.Type == MCPServerTypeStreamable &&
+			   ((config.McpProxy.Options.OAuth2 != nil && config.McpProxy.Options.OAuth2.Enabled) || len(clientConfig.Options.AuthTokens) > 0) {
+				middlewares = append(middlewares, newCombinedAuthMiddleware(
+					clientConfig.Options.AuthTokens,
+					config.McpProxy.Options.OAuth2,
+					oauthServer,
+				))
 			} else if len(clientConfig.Options.AuthTokens) > 0 {
-				// Fall back to token authentication if OAuth2 is not configured
+				// For non-streamable transports, use simple auth middleware
 				middlewares = append(middlewares, newAuthMiddleware(clientConfig.Options.AuthTokens))
 			}
 			mcpRoute := path.Join(baseURL.Path, name)
