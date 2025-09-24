@@ -53,6 +53,7 @@ type AuthorizationCode struct {
 	CodeChallenge string // PKCE challenge
 	ExpiresAt     time.Time
 	Resource      string
+	Username      string
 }
 
 type AccessToken struct {
@@ -62,6 +63,7 @@ type AccessToken struct {
 	Scope        string
 	Resource     string
 	ExpiresAt    time.Time
+	Username     string
 }
 
 // OAuth Server Metadata Response
@@ -726,6 +728,7 @@ func (s *OAuthServer) handleAuthorizationPOST(w http.ResponseWriter, r *http.Req
 		CodeChallenge: codeChallenge,
 		ExpiresAt:     time.Now().Add(10 * time.Minute),
 		Resource:      resource,
+		Username:      username,
 	}
 
 	s.mutex.Lock()
@@ -894,6 +897,7 @@ func (s *OAuthServer) handleToken(w http.ResponseWriter, r *http.Request) {
 		Scope:        authCode.Scope,
 		Resource:     resource,
 		ExpiresAt:    time.Now().Add(s.tokenExpiration),
+		Username:     authCode.Username,
 	}
 
 	s.mutex.Lock()
@@ -903,10 +907,10 @@ func (s *OAuthServer) handleToken(w http.ResponseWriter, r *http.Request) {
 	// Persist tokens to disk
 	s.saveClients()
 
-	// Set expires_in to 0 when expiration is disabled (RFC 6749 - 0 means no expiration)
+	// Set expires_in to 5 years when expiration is disabled (clients handle this better than 0)
 	expiresIn := int(s.tokenExpiration.Seconds())
 	if s.disableTokenExpiration {
-		expiresIn = 0
+		expiresIn = int((5 * 365 * 24 * time.Hour).Seconds()) // 5 years
 	}
 	
 	response := TokenResponse{
@@ -1098,6 +1102,7 @@ func (s *OAuthServer) handleRefreshToken(w http.ResponseWriter, r *http.Request,
 		Scope:        oldToken.Scope,
 		Resource:     oldToken.Resource,
 		ExpiresAt:    time.Now().Add(s.tokenExpiration),
+		Username:     oldToken.Username,
 	}
 	
 	s.mutex.Lock()
@@ -1109,10 +1114,10 @@ func (s *OAuthServer) handleRefreshToken(w http.ResponseWriter, r *http.Request,
 	
 	log.Printf("OAuth: Refreshed tokens for client %s", clientID)
 	
-	// Set expires_in to 0 when expiration is disabled (RFC 6749 - 0 means no expiration)
+	// Set expires_in to 5 years when expiration is disabled (clients handle this better than 0)
 	expiresIn := int(s.tokenExpiration.Seconds())
 	if s.disableTokenExpiration {
-		expiresIn = 0
+		expiresIn = int((5 * 365 * 24 * time.Hour).Seconds()) // 5 years
 	}
 	
 	response := TokenResponse{
@@ -1164,6 +1169,7 @@ func (s *OAuthServer) writeOAuthError(w http.ResponseWriter, error, description 
 	})
 }
 
+
 // Register OAuth routes
 func (s *OAuthServer) RegisterRoutes(mux *http.ServeMux) {
 	// Global OAuth endpoints
@@ -1171,7 +1177,7 @@ func (s *OAuthServer) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/oauth/register", s.handleClientRegistration)
 	mux.HandleFunc("/oauth/authorize", s.handleAuthorization)
 	mux.HandleFunc("/oauth/token", s.handleToken)
-	
+
 	// Per-server OAuth discovery endpoints
 	mux.HandleFunc("/.well-known/oauth-authorization-server/", s.handleServerMetadata)
 	mux.HandleFunc("/.well-known/oauth-protected-resource/", s.handleProtectedResourceMetadata)

@@ -56,6 +56,47 @@ type ToolFilterConfig struct {
 	List []string       `json:"list,omitempty"`
 }
 
+type UserFilterMode string
+
+const (
+	UserFilterModeAllow UserFilterMode = "allow"
+	UserFilterModeBlock UserFilterMode = "block"
+)
+
+type UserFilterConfig struct {
+	Mode UserFilterMode `json:"mode,omitempty"`
+	List []string       `json:"list,omitempty"`
+}
+
+// IsUserAllowed checks if a user is allowed based on the user filter configuration
+func (ufc *UserFilterConfig) IsUserAllowed(username string) bool {
+	if ufc == nil || username == "" {
+		// No filter configured or empty username - allow by default
+		return true
+	}
+
+	// Check if username is in the list
+	userInList := false
+	for _, user := range ufc.List {
+		if user == username {
+			userInList = true
+			break
+		}
+	}
+
+	switch ufc.Mode {
+	case UserFilterModeAllow:
+		// Allow mode: user must be in the list to be allowed
+		return userInList
+	case UserFilterModeBlock:
+		// Block mode: user must NOT be in the list to be allowed
+		return !userInList
+	default:
+		// No mode specified or unknown mode - allow by default
+		return true
+	}
+}
+
 type OAuth2Config struct {
 	Enabled           bool              `json:"enabled,omitempty"`
 	Users             map[string]string `json:"users,omitempty"`
@@ -72,6 +113,7 @@ type OptionsV2 struct {
 	AuthTokens     []string             `json:"authTokens,omitempty"`
 	OAuth2         *OAuth2Config        `json:"oauth2,omitempty"`
 	ToolFilter     *ToolFilterConfig    `json:"toolFilter,omitempty"`
+	UserFilter     *UserFilterConfig    `json:"userFilter,omitempty"`
 }
 
 type MCPProxyConfigV2 struct {

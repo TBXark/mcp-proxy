@@ -1,0 +1,56 @@
+{
+  "mcpProxy": {
+    "baseURL": "http://localhost:9090",
+    "addr": ":9090",
+    "name": "MCP Proxy with User Restrictions",
+    "version": "1.0.0",
+    "type": "streamable-http",
+    "options": {
+      "oauth2": {
+        "enabled": true,
+        "users": {
+          "alice": "password123",
+          "bob": "password456",
+          "admin": "adminpass"
+        },
+        "disableTokenExpiration": true,
+        "persistenceDir": ".mcpproxy-test"
+      }
+    }
+  },
+  "mcpServers": {
+    "server1": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      "options": {
+        "logEnabled": true,
+        "userFilter": {
+          "mode": "allow",
+          "list": ["alice", "admin"]
+        }
+      }
+    },
+    "server2": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-git", "--repository", "."],
+      "options": {
+        "logEnabled": true,
+        "userFilter": {
+          "mode": "allow",
+          "list": ["alice", "bob", "admin"]
+        }
+      }
+    },
+    "server3": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "options": {
+        "logEnabled": true,
+        "userFilter": {
+          "mode": "block",
+          "list": ["alice"]
+        }
+      }
+    }
+  }
+}

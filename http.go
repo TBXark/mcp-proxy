@@ -86,11 +86,12 @@ func newCombinedAuthMiddleware(authTokens []string, oauth2Config *OAuth2Config, 
 				if oauth2Config != nil && oauth2Config.Enabled && oauthServer != nil {
 					accessToken, valid := oauthServer.ValidateToken(token)
 					if valid {
-						log.Printf("Request authenticated with OAuth token for client: %s", accessToken.ClientID)
+						log.Printf("Request authenticated with OAuth token for client: %s, username: %s", accessToken.ClientID, accessToken.Username)
 						// Add token info to request context for potential use
 						ctx := context.WithValue(r.Context(), "X-OAuth-Client-ID", accessToken.ClientID)
 						ctx = context.WithValue(ctx, "X-OAuth-Scope", accessToken.Scope)
 						ctx = context.WithValue(ctx, "X-OAuth-Resource", accessToken.Resource)
+						ctx = context.WithValue(ctx, "X-OAuth-Username", accessToken.Username)
 
 						next.ServeHTTP(w, r.WithContext(ctx))
 						return
@@ -125,6 +126,36 @@ func recoverMiddleware(prefix string) MiddlewareFunc {
 					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				}
 			}()
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func newServerAccessMiddleware(serverName string, userFilter *UserFilterConfig) MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Skip access control if no user filter configured
+			if userFilter == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			username, ok := r.Context().Value("X-OAuth-Username").(string)
+			if !ok || username == "" {
+				// No OAuth username in context, proceed normally (this might be token-based auth)
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Check if user has access to this server based on user filter
+			if !userFilter.IsUserAllowed(username) {
+				log.Printf("User %s denied access to server %s (mode: %s, list: %v)",
+					username, serverName, userFilter.Mode, userFilter.List)
+				http.Error(w, "Access denied: You don't have permission to access this server", http.StatusForbidden)
+				return
+			}
+
+			log.Printf("User %s granted access to server %s", username, serverName)
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -194,6 +225,10 @@ func startHTTPServer(config *Config) error {
 					config.McpProxy.Options.OAuth2,
 					oauthServer,
 				))
+				// Add server access middleware for OAuth-enabled servers with user filters
+				if config.McpProxy.Options.OAuth2 != nil && config.McpProxy.Options.OAuth2.Enabled && clientConfig.Options.UserFilter != nil {
+					middlewares = append(middlewares, newServerAccessMiddleware(name, clientConfig.Options.UserFilter))
+				}
 			} else if len(clientConfig.Options.AuthTokens) > 0 {
 				// For non-streamable transports, use simple auth middleware
 				middlewares = append(middlewares, newAuthMiddleware(clientConfig.Options.AuthTokens))
