@@ -93,8 +93,7 @@ func startHTTPServer(config *Config) error {
 	}
 
 	for name, clientConfig := range config.McpServers {
-		isEnabled := clientConfig.Options == nil || clientConfig.Options.Enabled == nil || *clientConfig.Options.Enabled
-		if !isEnabled {
+		if !clientConfig.Options.Enabled.OrElse(true) {
 			log.Printf("<%s> Disabled", name)
 			continue
 		}

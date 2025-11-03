@@ -66,7 +66,7 @@ type OptionsV2 struct {
 	LogEnabled     optional.Field[bool] `json:"logEnabled,omitempty"`
 	AuthTokens     []string             `json:"authTokens,omitempty"`
 	ToolFilter     *ToolFilterConfig    `json:"toolFilter,omitempty"`
-	Enabled        *bool                `json:"enabled,omitempty"`
+	Enabled        optional.Field[bool] `json:"enabled,omitempty"`
 }
 
 type MCPProxyConfigV2 struct {
