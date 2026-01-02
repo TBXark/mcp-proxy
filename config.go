@@ -163,6 +163,9 @@ func newConfProvider(path string, insecure, expandEnv bool, httpHeaders string, 
 					}
 				}
 			}
+			if len(headers) > 0 {
+				opts = append(opts, http.WithHeaders(headers))
+			}
 		}
 		pro := http.New(path, opts...)
 		if expandEnv {
