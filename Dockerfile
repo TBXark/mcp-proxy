@@ -1,4 +1,4 @@
-FROM golang:1.24 AS builder
+FROM golang:1.25.5 AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -16,10 +16,9 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
     ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx && \
     ln -s /usr/local/bin/node /usr/local/bin/nodejs
 
-RUN apt-get update && \
-    apt-get install -y git && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/build/mcp-proxy /main
 ENTRYPOINT ["/main"]
