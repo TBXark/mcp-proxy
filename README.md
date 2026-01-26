@@ -20,7 +20,7 @@ An MCP proxy that aggregates multiple MCP servers behind a single HTTP entrypoin
 ### Build from source
 
 ```bash
-git clone https://github.com/TBXark/mcp-proxy.git
+git clone https://github.com/tbxark/mcp-proxy.git
 cd mcp-proxy
 make build
 ./build/mcp-proxy --config path/to/config.json
@@ -29,7 +29,7 @@ make build
 ### Install via Go
 
 ```bash
-go install github.com/TBXark/mcp-proxy@latest
+go install github.com/tbxark/mcp-proxy@latest
 ```
 
 ### Docker
