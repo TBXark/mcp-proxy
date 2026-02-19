@@ -62,8 +62,8 @@ type ToolFilterConfig struct {
 }
 
 type OptionsV2 struct {
-	PanicIfInvalid optional.Field[bool] `json:"panicIfInvalid,omitempty"`
-	LogEnabled     optional.Field[bool] `json:"logEnabled,omitempty"`
+	PanicIfInvalid optional.Field[bool] `json:"panicIfInvalid"`
+	LogEnabled     optional.Field[bool] `json:"logEnabled"`
 	AuthTokens     []string             `json:"authTokens,omitempty"`
 	ToolFilter     *ToolFilterConfig    `json:"toolFilter,omitempty"`
 	Disabled       bool                 `json:"disabled,omitempty"`
@@ -153,7 +153,7 @@ func newConfProvider(path string, insecure, expandEnv bool, httpHeaders string, 
 		if httpHeaders != "" {
 			// format: 'Key1:Value1;Key2:Value2'
 			headers := make(nethttp.Header)
-			for _, kv := range strings.Split(httpHeaders, ";") {
+			for kv := range strings.SplitSeq(httpHeaders, ";") {
 				parts := strings.SplitN(kv, ":", 2)
 				if len(parts) == 2 {
 					key := strings.TrimSpace(parts[0])

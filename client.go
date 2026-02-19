@@ -94,7 +94,7 @@ func (c *Client) addToMCPServer(ctx context.Context, clientInfo mcp.Implementati
 	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initRequest.Params.ClientInfo = clientInfo
 	initRequest.Params.Capabilities = mcp.ClientCapabilities{
-		Experimental: make(map[string]interface{}),
+		Experimental: make(map[string]any),
 		Roots:        nil,
 		Sampling:     nil,
 	}
@@ -183,6 +183,9 @@ func (c *Client) addToolsToServer(ctx context.Context, mcpServer *server.MCPServ
 		if err != nil {
 			return err
 		}
+		if tools == nil {
+			return fmt.Errorf("<%s> ListTools returned nil response without error", c.name)
+		}
 		if len(tools.Tools) == 0 {
 			break
 		}
@@ -209,6 +212,9 @@ func (c *Client) addPromptsToServer(ctx context.Context, mcpServer *server.MCPSe
 		if err != nil {
 			return err
 		}
+		if prompts == nil {
+			return fmt.Errorf("<%s> ListPrompts returned nil response without error", c.name)
+		}
 		if len(prompts.Prompts) == 0 {
 			break
 		}
@@ -231,6 +237,9 @@ func (c *Client) addResourcesToServer(ctx context.Context, mcpServer *server.MCP
 		resources, err := c.client.ListResources(ctx, resourcesRequest)
 		if err != nil {
 			return err
+		}
+		if resources == nil {
+			return fmt.Errorf("<%s> ListResources returned nil response without error", c.name)
 		}
 		if len(resources.Resources) == 0 {
 			break
@@ -262,7 +271,7 @@ func (c *Client) addResourceTemplatesToServer(ctx context.Context, mcpServer *se
 		if err != nil {
 			return err
 		}
-		if len(resourceTemplates.ResourceTemplates) == 0 {
+		if resourceTemplates == nil || len(resourceTemplates.ResourceTemplates) == 0 {
 			break
 		}
 		log.Printf("<%s> Successfully listed %d resource templates", c.name, len(resourceTemplates.ResourceTemplates))
