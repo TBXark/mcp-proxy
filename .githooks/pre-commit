@@ -1,0 +1,13 @@
+#!/bin/bash
+
+echo "Running pre-commit tests..."
+
+go test ./... -cover -timeout 30s
+
+if [ $? -ne 0 ]; then
+    echo "❌ Tests failed. Commit aborted."
+    exit 1
+fi
+
+echo "✅ All tests passed."
+exit 0

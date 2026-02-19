@@ -148,3 +148,6 @@ projects
 .codex/skills
 .opencode
 openspec
+
+coverage.html
+coverage.out
