@@ -1,52 +1,29 @@
 {
   "mcpProxy": {
-    "baseURL": "https://mcp.example.com",
-    "addr": ":9090",
-    "name": "MCP Proxy",
+    "baseURL": "http://localhost:8000",
+    "addr": ":8000",
+    "name": "E2B Multi-Studio MCP Proxy",
     "version": "1.0.0",
     "type": "streamable-http",
     "options": {
       "panicIfInvalid": false,
-      "logEnabled": true,
-      "authTokens": [
-        "DefaultTokens"
-      ]
+      "logEnabled": true
     }
   },
   "mcpServers": {
-    "github": {
+    "user1": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-github"
-      ],
+      "args": ["-y", "@e2b/mcp-server"],
       "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
-      },
-      "options": {
-        "toolFilter": {
-          "mode": "block",
-          "list": [
-            "create_or_update_file"
-          ]
-        }
+        "E2B_API_KEY": "e2b_77dedbf103eb7ded1e32844b350f46c6eb5eb15f"
       }
     },
-    "fetch": {
-      "command": "uvx",
-      "args": [
-        "mcp-server-fetch"
-      ],
-      "options": {
-        "panicIfInvalid": true,
-        "logEnabled": false,
-        "authTokens": [
-          "SpecificTokens"
-        ]
+    "user2": {
+      "command": "npx",
+      "args": ["-y", "@e2b/mcp-server"],
+      "env": {
+        "E2B_API_KEY": "e2b_77dedbf103eb7ded1e32844b350f46c6eb5eb15f"
       }
-    },
-    "amap": {
-      "url": "https://mcp.amap.com/sse?key=<YOUR_TOKEN>"
     }
   }
 }

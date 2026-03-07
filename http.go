@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -73,6 +74,24 @@ func recoverMiddleware(prefix string) MiddlewareFunc {
 	}
 }
 
+func serversListHandler(config *Config) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		servers := make([]string, 0, len(config.McpServers))
+		for name, clientConfig := range config.McpServers {
+			if clientConfig.Options != nil && clientConfig.Options.Disabled {
+				continue
+			}
+			servers = append(servers, name)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string][]string{"servers": servers})
+	})
+}
+
 func startHTTPServer(config *Config) error {
 	baseURL, uErr := url.Parse(config.McpProxy.BaseURL)
 	if uErr != nil {
@@ -91,6 +110,13 @@ func startHTTPServer(config *Config) error {
 	info := mcp.Implementation{
 		Name: config.McpProxy.Name,
 	}
+
+	serversRoute := path.Join(baseURL.Path, "servers")
+	if !strings.HasPrefix(serversRoute, "/") {
+		serversRoute = "/" + serversRoute
+	}
+	httpMux.Handle(serversRoute, serversListHandler(config))
+	log.Printf("List API at %s", serversRoute)
 
 	for name, clientConfig := range config.McpServers {
 		if clientConfig.Options.Disabled {
