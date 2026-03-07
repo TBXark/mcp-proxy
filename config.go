@@ -95,6 +95,10 @@ type MCPClientConfigV2 struct {
 }
 
 func parseMCPClientConfigV2(conf *MCPClientConfigV2) (any, error) {
+	// Only stdio transport is supported.
+	if conf.URL != "" || conf.TransportType == MCPClientTypeSSE || conf.TransportType == MCPClientTypeStreamable {
+		return nil, errors.New("only stdio transport is supported; URL, SSE, and streamable-http are not allowed")
+	}
 	if conf.Command != "" || conf.TransportType == MCPClientTypeStdio {
 		if conf.Command == "" {
 			return nil, errors.New("command is required for stdio transport")
@@ -105,28 +109,13 @@ func parseMCPClientConfigV2(conf *MCPClientConfigV2) (any, error) {
 			Args:    conf.Args,
 		}, nil
 	}
-	if conf.URL != "" {
-		if conf.TransportType == MCPClientTypeStreamable {
-			return &StreamableMCPClientConfig{
-				URL:     conf.URL,
-				Headers: conf.Headers,
-				Timeout: conf.Timeout,
-			}, nil
-		} else {
-			return &SSEMCPClientConfig{
-				URL:     conf.URL,
-				Headers: conf.Headers,
-			}, nil
-		}
-	}
-	return nil, errors.New("invalid server type")
+	return nil, errors.New("invalid server config: command is required for stdio transport")
 }
 
 // ---- Config ----
 
 type Config struct {
-	McpProxy   *MCPProxyConfigV2             `json:"mcpProxy"`
-	McpServers map[string]*MCPClientConfigV2 `json:"mcpServers"`
+	McpProxy *MCPProxyConfigV2 `json:"mcpProxy"`
 }
 
 type FullConfig struct {
@@ -201,27 +190,12 @@ func load(path string, insecure, expandEnv bool, httpHeaders string, httpTimeout
 	if conf.McpProxy.Options == nil {
 		conf.McpProxy.Options = &OptionsV2{}
 	}
-	for _, clientConfig := range conf.McpServers {
-		if clientConfig.Options == nil {
-			clientConfig.Options = &OptionsV2{}
-		}
-		if clientConfig.Options.AuthTokens == nil {
-			clientConfig.Options.AuthTokens = conf.McpProxy.Options.AuthTokens
-		}
-		if !clientConfig.Options.PanicIfInvalid.Present() {
-			clientConfig.Options.PanicIfInvalid = conf.McpProxy.Options.PanicIfInvalid
-		}
-		if !clientConfig.Options.LogEnabled.Present() {
-			clientConfig.Options.LogEnabled = conf.McpProxy.Options.LogEnabled
-		}
-	}
 
 	if conf.McpProxy.Type == "" {
 		conf.McpProxy.Type = MCPServerTypeSSE // default to SSE
 	}
 
 	return &Config{
-		McpProxy:   conf.McpProxy,
-		McpServers: conf.McpServers,
+		McpProxy: conf.McpProxy,
 	}, nil
 }

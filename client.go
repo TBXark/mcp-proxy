@@ -7,20 +7,16 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
 type Client struct {
-	name            string
-	needPing        bool
-	needManualStart bool
-	client          *client.Client
-	options         *OptionsV2
+	name    string
+	client  *client.Client
+	options *OptionsV2
 }
 
 func newMCPClient(name string, conf *MCPClientConfigV2) (*Client, error) {
@@ -28,68 +24,26 @@ func newMCPClient(name string, conf *MCPClientConfigV2) (*Client, error) {
 	if pErr != nil {
 		return nil, pErr
 	}
-	switch v := clientInfo.(type) {
-	case *StdioMCPClientConfig:
-		envs := make([]string, 0, len(v.Env))
-		for kk, vv := range v.Env {
-			envs = append(envs, fmt.Sprintf("%s=%s", kk, vv))
-		}
-		mcpClient, err := client.NewStdioMCPClient(v.Command, envs, v.Args...)
-		if err != nil {
-			return nil, err
-		}
-
-		return &Client{
-			name:    name,
-			client:  mcpClient,
-			options: conf.Options,
-		}, nil
-	case *SSEMCPClientConfig:
-		var options []transport.ClientOption
-		if len(v.Headers) > 0 {
-			options = append(options, client.WithHeaders(v.Headers))
-		}
-		mcpClient, err := client.NewSSEMCPClient(v.URL, options...)
-		if err != nil {
-			return nil, err
-		}
-		return &Client{
-			name:            name,
-			needPing:        true,
-			needManualStart: true,
-			client:          mcpClient,
-			options:         conf.Options,
-		}, nil
-	case *StreamableMCPClientConfig:
-		var options []transport.StreamableHTTPCOption
-		if len(v.Headers) > 0 {
-			options = append(options, transport.WithHTTPHeaders(v.Headers))
-		}
-		if v.Timeout > 0 {
-			options = append(options, transport.WithHTTPTimeout(v.Timeout))
-		}
-		mcpClient, err := client.NewStreamableHttpClient(v.URL, options...)
-		if err != nil {
-			return nil, err
-		}
-		return &Client{
-			name:            name,
-			needPing:        true,
-			needManualStart: true,
-			client:          mcpClient,
-			options:         conf.Options,
-		}, nil
+	v, ok := clientInfo.(*StdioMCPClientConfig)
+	if !ok {
+		return nil, errors.New("only stdio transport is supported")
 	}
-	return nil, errors.New("invalid client type")
+	envs := make([]string, 0, len(v.Env))
+	for kk, vv := range v.Env {
+		envs = append(envs, fmt.Sprintf("%s=%s", kk, vv))
+	}
+	mcpClient, err := client.NewStdioMCPClient(v.Command, envs, v.Args...)
+	if err != nil {
+		return nil, err
+	}
+	return &Client{
+		name:    name,
+		client:  mcpClient,
+		options: conf.Options,
+	}, nil
 }
 
 func (c *Client) addToMCPServer(ctx context.Context, clientInfo mcp.Implementation, mcpServer *server.MCPServer) error {
-	if c.needManualStart {
-		err := c.client.Start(ctx)
-		if err != nil {
-			return err
-		}
-	}
 	initRequest := mcp.InitializeRequest{}
 	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initRequest.Params.ClientInfo = clientInfo
@@ -111,37 +65,7 @@ func (c *Client) addToMCPServer(ctx context.Context, clientInfo mcp.Implementati
 	_ = c.addPromptsToServer(ctx, mcpServer)
 	_ = c.addResourcesToServer(ctx, mcpServer)
 	_ = c.addResourceTemplatesToServer(ctx, mcpServer)
-
-	if c.needPing {
-		go c.startPingTask(ctx)
-	}
 	return nil
-}
-
-func (c *Client) startPingTask(ctx context.Context) {
-	interval := 30 * time.Second
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	failCount := 0
-	for {
-		select {
-		case <-ctx.Done():
-			log.Printf("<%s> Context done, stopping ping", c.name)
-			return
-		case <-ticker.C:
-			if err := c.client.Ping(ctx); err != nil {
-				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					return
-				}
-				failCount++
-				log.Printf("<%s> MCP Ping failed: %v (count=%d)", c.name, err, failCount)
-			} else if failCount > 0 {
-				log.Printf("<%s> MCP Ping recovered after %d failures", c.name, failCount)
-				failCount = 0
-			}
-		}
-	}
 }
 
 func (c *Client) addToolsToServer(ctx context.Context, mcpServer *server.MCPServer) error {

@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"golang.org/x/sync/errgroup"
 )
 
 // serverRegistry holds connected MCP servers (static + dynamic) for routing.
@@ -145,26 +144,13 @@ type registerServerRequest struct {
 	Config *MCPClientConfigV2 `json:"config"`
 }
 
-func serversListHandler(config *Config, registry *serverRegistry) http.Handler {
+func serversListHandler(registry *serverRegistry) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		serverSet := make(map[string]struct{})
-		for name, clientConfig := range config.McpServers {
-			if clientConfig.Options != nil && clientConfig.Options.Disabled {
-				continue
-			}
-			serverSet[name] = struct{}{}
-		}
-		for _, name := range registry.listDynamic() {
-			serverSet[name] = struct{}{}
-		}
-		servers := make([]string, 0, len(serverSet))
-		for name := range serverSet {
-			servers = append(servers, name)
-		}
+		servers := registry.listDynamic()
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string][]string{"servers": servers})
 	})
@@ -193,9 +179,13 @@ func serversRegisterHandler(config *Config, registry *serverRegistry, httpServer
 			http.Error(w, "config is required", http.StatusBadRequest)
 			return
 		}
-		// Prevent overwriting a server that already exists in config or was already registered
-		if _, inConfig := config.McpServers[req.Name]; inConfig {
-			http.Error(w, "server name already exists in config", http.StatusConflict)
+		// Only stdio transport is supported; reject URL-based (SSE/streamable-http) configs.
+		if req.Config.URL != "" || req.Config.TransportType == MCPClientTypeSSE || req.Config.TransportType == MCPClientTypeStreamable {
+			http.Error(w, "only stdio transport is supported; URL, SSE, and streamable-http are not allowed", http.StatusBadRequest)
+			return
+		}
+		if req.Config.Command == "" {
+			http.Error(w, "config.command is required for stdio transport", http.StatusBadRequest)
 			return
 		}
 		if _, ok := registry.get(req.Name); ok {
@@ -233,7 +223,7 @@ func serversRegisterHandler(config *Config, registry *serverRegistry, httpServer
 			log.Printf("<%s> Register: failed to add client to server: %v", req.Name, err)
 			errMsg := err.Error()
 			if strings.Contains(errMsg, "transport closed") {
-				errMsg = "MCP transport closed during handshake. For stdio servers, ensure the command runs (e.g. run it in a terminal to see errors). For URL-based servers, check the endpoint and network."
+				errMsg = "MCP transport closed during handshake. For stdio servers, ensure the command runs (e.g. run it in a terminal to see errors)."
 			}
 			http.Error(w, "Failed to connect: "+errMsg, http.StatusInternalServerError)
 			return
@@ -287,7 +277,7 @@ func relPath(fullPath, base string) string {
 
 // mainRouter handles all requests under the proxy base path: list, register, and MCP server routes.
 func mainRouter(basePathStr string, config *Config, registry *serverRegistry, httpServer *http.Server) http.Handler {
-	listH := serversListHandler(config, registry)
+	listH := serversListHandler(registry)
 	registerH := serversRegisterHandler(config, registry, httpServer)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -337,9 +327,6 @@ func startHTTPServer(config *Config) error {
 		Addr:    config.McpProxy.Addr,
 		Handler: httpMux,
 	}
-	info := mcp.Implementation{
-		Name: config.McpProxy.Name,
-	}
 
 	// Mount the main router at the proxy base path so it handles /servers, /servers/register, and /<name>/...
 	mountPath := basePathStr
@@ -352,66 +339,6 @@ func startHTTPServer(config *Config) error {
 	}
 	log.Printf("List API at %s/servers", mountPath)
 	log.Printf("Register API at %s/servers/register (POST)", mountPath)
-
-	var errorGroup errgroup.Group
-	for name, clientConfig := range config.McpServers {
-		if clientConfig.Options != nil && clientConfig.Options.Disabled {
-			log.Printf("<%s> Disabled", name)
-			continue
-		}
-		mcpClient, err := newMCPClient(name, clientConfig)
-		if err != nil {
-			return err
-		}
-		server, err := newMCPServer(name, config.McpProxy, clientConfig)
-		if err != nil {
-			return err
-		}
-		name := name
-		clientConfig := clientConfig
-		errorGroup.Go(func() error {
-			log.Printf("<%s> Connecting", name)
-			addErr := mcpClient.addToMCPServer(ctx, info, server.mcpServer)
-			if addErr != nil {
-				log.Printf("<%s> Failed to add client to server: %v", name, addErr)
-				if clientConfig.Options != nil && clientConfig.Options.PanicIfInvalid.OrElse(false) {
-					return addErr
-				}
-				return nil
-			}
-			log.Printf("<%s> Connected", name)
-
-			middlewares := make([]MiddlewareFunc, 0)
-			middlewares = append(middlewares, recoverMiddleware(name))
-			if clientConfig.Options != nil && clientConfig.Options.LogEnabled.OrElse(false) {
-				middlewares = append(middlewares, loggerMiddleware(name))
-			}
-			if clientConfig.Options != nil && len(clientConfig.Options.AuthTokens) > 0 {
-				middlewares = append(middlewares, newAuthMiddleware(clientConfig.Options.AuthTokens))
-			}
-			handler := chainMiddleware(server.handler, middlewares...)
-			entry := &registryEntry{
-				handler: handler,
-				client:  mcpClient,
-				shutdownFunc: func() {
-					log.Printf("<%s> Shutting down", name)
-					_ = mcpClient.Close()
-				},
-			}
-			registry.add(name, entry, false)
-			httpServer.RegisterOnShutdown(entry.shutdownFunc)
-			log.Printf("<%s> Handling requests at %s/%s/", name, mountPath, name)
-			return nil
-		})
-	}
-
-	go func() {
-		err := errorGroup.Wait()
-		if err != nil {
-			log.Fatalf("Failed to add clients: %v", err)
-		}
-		log.Printf("All clients initialized")
-	}()
 
 	go func() {
 		log.Printf("Starting %s server", config.McpProxy.Type)
