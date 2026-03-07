@@ -1,0 +1,52 @@
+{
+  "mcpProxy": {
+    "baseURL": "https://mcp.example.com",
+    "addr": ":9090",
+    "name": "MCP Proxy",
+    "version": "1.0.0",
+    "type": "streamable-http",
+    "options": {
+      "panicIfInvalid": false,
+      "logEnabled": true,
+      "authTokens": [
+        "DefaultTokens"
+      ]
+    }
+  },
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
+      },
+      "options": {
+        "toolFilter": {
+          "mode": "block",
+          "list": [
+            "create_or_update_file"
+          ]
+        }
+      }
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-fetch"
+      ],
+      "options": {
+        "panicIfInvalid": true,
+        "logEnabled": false,
+        "authTokens": [
+          "SpecificTokens"
+        ]
+      }
+    },
+    "amap": {
+      "url": "https://mcp.amap.com/sse?key=<YOUR_TOKEN>"
+    }
+  }
+}
